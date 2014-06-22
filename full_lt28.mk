@@ -50,6 +50,16 @@ PRODUCT_PACKAGES += \
     libQcomUI \
     libtilerenderer
 
+# Key layouts and touchscreen
+PRODUCT_COPY_FILES += \
+   $(LOCAL_PATH)/config/clearpad.kl:system/usr/keylayout/clearpad.kl \
+   $(LOCAL_PATH)/config/clearpad.idc:system/usr/idc/clearpad.idc \
+   $(LOCAL_PATH)/config/fuji-keypad.kl:system/usr/keylayout/fuji-keypad.kl \
+   $(LOCAL_PATH)/config/gpio-key.kl:system/usr/keylayout/gpio-key.kl \
+   $(LOCAL_PATH)/config/keypad-pmic-fuji.kl:system/usr/keylayout/keypad-pmic-fuji.kl \
+   $(LOCAL_PATH)/config/pmic8058_pwrkey.kl:system/usr/keylayout/pmic8058_pwrkey.kl \
+   $(LOCAL_PATH)/config/simple_remote.kl:system/usr/keylayout/simple_remote.kl
+
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base.mk)
 
 $(call inherit-product, frameworks/base/build/phone-xhdpi-1024-dalvik-heap.mk)
