@@ -1,4 +1,7 @@
 
+PRODUCT_PACKAGES := \
+    lights.msm8660
+
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/sony_logo.rle:root/logo.rle \
     $(LOCAL_PATH)/prebuilt/sony_bootanimation.zip:system/media/bootanimation.zip
