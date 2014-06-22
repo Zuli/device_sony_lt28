@@ -1,0 +1,352 @@
+
+project build/
+diff --git a/core/binary.mk b/core/binary.mk
+index e488200..5f70232 100644
+--- a/core/binary.mk
++++ b/core/binary.mk
+@@ -486,6 +486,11 @@ all_objects := \
+ 	$(proto_generated_objects) \
+ 	$(addprefix $(TOPDIR)$(LOCAL_PATH)/,$(LOCAL_PREBUILT_OBJ_FILES))
+ 
++## Allow a device's own headers to take precedence over global ones
++ifneq ($(TARGET_SPECIFIC_HEADER_PATH),)
++LOCAL_C_INCLUDES := $(TOPDIR)$(TARGET_SPECIFIC_HEADER_PATH) $(LOCAL_C_INCLUDES)
++endif
++
+ LOCAL_C_INCLUDES += $(TOPDIR)$(LOCAL_PATH) $(intermediates) $(base_intermediates)
+ 
+ ifndef LOCAL_NDK_VERSION
+diff --git a/core/config.mk b/core/config.mk
+index 41e60ea..bca4be5 100644
+--- a/core/config.mk
++++ b/core/config.mk
+@@ -204,7 +204,7 @@ ICUDATA := $(HOST_OUT_EXECUTABLES)/icudata$(HOST_EXECUTABLE_SUFFIX)
+ SIGNAPK_JAR := $(HOST_OUT_JAVA_LIBRARIES)/signapk$(COMMON_JAVA_PACKAGE_SUFFIX)
+ MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ MINIGZIP := $(HOST_OUT_EXECUTABLES)/minigzip$(HOST_EXECUTABLE_SUFFIX)
+-MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
++MKBOOTIMG := $(if $(BOARD_CUSTOM_MKBOOTIMG), $(BOARD_CUSTOM_MKBOOTIMG), $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX))
+ MKYAFFS2 := $(HOST_OUT_EXECUTABLES)/mkyaffs2image$(HOST_EXECUTABLE_SUFFIX)
+ APICHECK := $(HOST_OUT_EXECUTABLES)/apicheck$(HOST_EXECUTABLE_SUFFIX)
+ FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
+
+project frameworks/base/
+diff --git a/graphics/jni/android_renderscript_RenderScript.cpp b/graphics/jni/android_renderscript_RenderScript.cpp
+index af03ee2..2644a2d 100644
+--- a/graphics/jni/android_renderscript_RenderScript.cpp
++++ b/graphics/jni/android_renderscript_RenderScript.cpp
+@@ -568,6 +568,7 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
+     LOG_API("nAllocationElementData1D, con(%p), alloc(%p), offset(%i), comp(%i), len(%i), sizeBytes(%i)", con, (RsAllocation)alloc, offset, compIdx, len, sizeBytes);
+     jbyte *ptr = _env->GetByteArrayElements(data, NULL);
+     rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
++    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
+     _env->ReleaseByteArrayElements(data, ptr, JNI_ABORT);
+ }
+ 
+diff --git a/libs/hwui/OpenGLRenderer.cpp b/libs/hwui/OpenGLRenderer.cpp
+index 4d22646..d8f0815 100644
+--- a/libs/hwui/OpenGLRenderer.cpp
++++ b/libs/hwui/OpenGLRenderer.cpp
+@@ -144,6 +144,13 @@ void OpenGLRenderer::setViewport(int width, int height) {
+     mDirtyClip = false;
+ }
+ 
++#ifdef QCOM_HARDWARE
++void OpenGLRenderer::getViewport(int &width, int &height) {
++    width = mWidth;
++    height = mHeight;
++}
++#endif
++
+ void OpenGLRenderer::prepare(bool opaque) {
+     prepareDirty(0.0f, 0.0f, mWidth, mHeight, opaque);
+ }
+diff --git a/libs/hwui/OpenGLRenderer.h b/libs/hwui/OpenGLRenderer.h
+index 2fc88e1..da4f034 100644
+--- a/libs/hwui/OpenGLRenderer.h
++++ b/libs/hwui/OpenGLRenderer.h
+@@ -64,6 +64,10 @@ public:
+ 
+     virtual void setViewport(int width, int height);
+ 
++#ifdef QCOM_HARDWARE
++    ANDROID_API void getViewport(int &width, int &height);
++#endif
++
+     ANDROID_API void prepare(bool opaque);
+     virtual void prepareDirty(float left, float top, float right, float bottom, bool opaque);
+     virtual void finish();
+diff --git a/opengl/include/EGL/eglext.h b/opengl/include/EGL/eglext.h
+index ca11863..9522f2f 100644
+--- a/opengl/include/EGL/eglext.h
++++ b/opengl/include/EGL/eglext.h
+@@ -229,6 +229,13 @@ struct ANativeWindowBuffer;
+ #define EGL_NATIVE_BUFFER_ANDROID               0x3140  /* eglCreateImageKHR target */
+ #endif
+ 
++#ifdef QCOM_HARDWARE
++#ifndef EGL_ANDROID_get_render_buffer
++#define EGL_ANDROID_get_render_buffer 1
++EGLAPI EGLClientBuffer EGLAPIENTRY eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw);
++#endif
++#endif // QCOM_HARDWARE
++
+ #ifndef EGL_ANDROID_recordable
+ #define EGL_ANDROID_recordable 1
+ #define EGL_RECORDABLE_ANDROID                  0x3142  /* EGLConfig attribute */
+diff --git a/opengl/include/GLES2/gl2ext.h b/opengl/include/GLES2/gl2ext.h
+index 9db4e25..3ed37f0 100644
+--- a/opengl/include/GLES2/gl2ext.h
++++ b/opengl/include/GLES2/gl2ext.h
+@@ -16,6 +16,10 @@ extern "C" {
+ #   define GL_APIENTRYP GL_APIENTRY*
+ #endif
+ 
++#ifdef QCOM_HARDWARE
++#define GL_GLEXT_PROTOTYPES
++#endif
++
+ /*------------------------------------------------------------------------*
+  * OES extension tokens
+  *------------------------------------------------------------------------*/
+diff --git a/opengl/libagl/egl.cpp b/opengl/libagl/egl.cpp
+index 6d4098c..5cecc0c 100644
+--- a/opengl/libagl/egl.cpp
++++ b/opengl/libagl/egl.cpp
+@@ -165,6 +165,9 @@ struct egl_surface_t
+     virtual     EGLint      getSwapBehavior() const;
+     virtual     EGLBoolean  swapBuffers();
+     virtual     EGLBoolean  setSwapRectangle(EGLint l, EGLint t, EGLint w, EGLint h);
++#ifdef QCOM_HARDWARE
++    virtual     EGLClientBuffer getRenderBuffer() const;
++#endif
+ protected:
+     GGLSurface              depth;
+ };
+@@ -208,6 +211,11 @@ EGLBoolean egl_surface_t::setSwapRectangle(
+ {
+     return EGL_FALSE;
+ }
++#ifdef QCOM_HARDWARE
++EGLClientBuffer egl_surface_t::getRenderBuffer() const {
++    return 0;
++}
++#endif
+ 
+ // ----------------------------------------------------------------------------
+ 
+@@ -233,6 +241,9 @@ struct egl_window_surface_v2_t : public egl_surface_t
+     virtual     EGLint      getRefreshRate() const;
+     virtual     EGLint      getSwapBehavior() const;
+     virtual     EGLBoolean  setSwapRectangle(EGLint l, EGLint t, EGLint w, EGLint h);
++#ifdef QCOM_HARDWARE
++    virtual     EGLClientBuffer  getRenderBuffer() const;
++#endif
+     
+ private:
+     status_t lock(ANativeWindowBuffer* buf, int usage, void** vaddr);
+@@ -571,6 +582,13 @@ EGLBoolean egl_window_surface_v2_t::setSwapRectangle(
+     return EGL_TRUE;
+ }
+ 
++#ifdef QCOM_HARDWARE
++EGLClientBuffer egl_window_surface_v2_t::getRenderBuffer() const
++{
++    return buffer;
++}
++#endif
++
+ EGLBoolean egl_window_surface_v2_t::bindDrawSurface(ogles_context_t* gl)
+ {
+     GGLSurface buffer;
+@@ -852,6 +870,10 @@ static const extention_map_t gExtentionMap[] = {
+             (__eglMustCastToProperFunctionPointerType)&eglDestroyImageKHR }, 
+     { "eglSetSwapRectangleANDROID", 
+             (__eglMustCastToProperFunctionPointerType)&eglSetSwapRectangleANDROID }, 
++#ifdef QCOM_HARDWARE
++    { "eglGetRenderBufferANDROID",
++            (__eglMustCastToProperFunctionPointerType)&eglGetRenderBufferANDROID },
++#endif
+ };
+ 
+ /*
+@@ -2077,3 +2099,20 @@ EGLBoolean eglSetSwapRectangleANDROID(EGLDisplay dpy, EGLSurface draw,
+ 
+     return EGL_TRUE;
+ }
++
++#ifdef QCOM_HARDWARE
++EGLClientBuffer eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw)
++{
++    if (egl_display_t::is_valid(dpy) == EGL_FALSE)
++        return setError(EGL_BAD_DISPLAY, (EGLClientBuffer)0);
++
++    egl_surface_t* d = static_cast<egl_surface_t*>(draw);
++    if (!d->isValid())
++        return setError(EGL_BAD_SURFACE, (EGLClientBuffer)0);
++    if (d->dpy != dpy)
++        return setError(EGL_BAD_DISPLAY, (EGLClientBuffer)0);
++
++    // post the surface
++    return d->getRenderBuffer();
++}
++#endif
+diff --git a/opengl/libs/EGL/eglApi.cpp b/opengl/libs/EGL/eglApi.cpp
+index 2b0ed5d..252668b 100644
+--- a/opengl/libs/EGL/eglApi.cpp
++++ b/opengl/libs/EGL/eglApi.cpp
+@@ -69,6 +69,10 @@ static const extention_map_t sExtentionMap[] = {
+             (__eglMustCastToProperFunctionPointerType)&eglGetSystemTimeFrequencyNV },
+     { "eglGetSystemTimeNV",
+             (__eglMustCastToProperFunctionPointerType)&eglGetSystemTimeNV },
++#ifdef QCOM_HARDWARE
++    { "eglGetRenderBufferANDROID",
++            (__eglMustCastToProperFunctionPointerType)&eglGetRenderBufferANDROID },
++#endif
+ };
+ 
+ // accesses protected by sExtensionMapMutex
+@@ -1443,6 +1447,25 @@ EGLBoolean eglGetSyncAttribKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLint attribute
+ // ----------------------------------------------------------------------------
+ 
+ /* ANDROID extensions entry-point go here */
++#ifdef QCOM_HARDWARE
++EGLClientBuffer eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw)
++{
++    clearError();
++
++    egl_display_t const * const dp = validate_display(dpy);
++    if (!dp) return EGL_FALSE;
++
++    SurfaceRef _s(dp, draw);
++    if (!_s.get()) return setError(EGL_BAD_SURFACE, (EGLClientBuffer*)0);
++
++    egl_surface_t const * const s = get_surface(draw);
++    if (s->cnx->egl.eglGetRenderBufferANDROID) {
++        return s->cnx->egl.eglGetRenderBufferANDROID(
++                dp->disp[s->impl].dpy, s->surface);
++    }
++    return setError(EGL_BAD_DISPLAY, (EGLClientBuffer*)0);
++}
++#endif
+ 
+ // ----------------------------------------------------------------------------
+ // NVIDIA extensions
+
+project hardware/libhardware/
+diff --git a/include/hardware/fb.h b/include/hardware/fb.h
+index ba2f286..d39c136 100644
+--- a/include/hardware/fb.h
++++ b/include/hardware/fb.h
+@@ -64,7 +64,14 @@ typedef struct framebuffer_device_t {
+     /* max swap interval supported by this framebuffer */
+     const int       maxSwapInterval;
+ 
++#ifdef QCOM_HARDWARE
++    /* number of framebuffers */
++    const int       numFramebuffers;
++
++    int reserved[7];
++#else
+     int reserved[8];
++#endif
+ 
+     /*
+      * requests a specific swap-interval (same definition than EGL)
+@@ -126,6 +133,10 @@ typedef struct framebuffer_device_t {
+ 
+     int (*compositionComplete)(struct framebuffer_device_t* dev);
+ 
++#ifdef QCOM_HARDWARE
++    int (*lockBuffer) (struct framebuffer_device_t* dev, int);
++#endif
++
+     /*
+      * This hook is OPTIONAL.
+      *
+@@ -141,7 +152,20 @@ typedef struct framebuffer_device_t {
+      */
+     int (*enableScreen)(struct framebuffer_device_t* dev, int enable);
+ 
++#ifdef QCOM_HARDWARE
++    int (*dequeueBuffer) (struct framebuffer_device_t* dev, int);
++
++    /*
++     * (*perform)() is used to inform custom event to fb device
++     * event - Type of event
++     * val1 - associated with event
++     * val2 - additional value(if any) associated with event
++     */
++    int (*perform) (struct framebuffer_device_t* dev, int event, int value);
++
++#else
+     void* reserved_proc[6];
++#endif
+ 
+ } framebuffer_device_t;
+ 
+diff --git a/include/hardware/hwcomposer.h b/include/hardware/hwcomposer.h
+index b4a7a7a..c428a09 100644
+--- a/include/hardware/hwcomposer.h
++++ b/include/hardware/hwcomposer.h
+@@ -66,7 +66,20 @@ enum {
+      * SurfaceFlinger will only honor this flag when the layer has no blending
+      *
+      */
++#ifdef QCOM_HARDWARE
++    HWC_HINT_CLEAR_FB       = 0x00000002,
++
++    /*
++     * HWC sets the HWC_HINT_DRAW_S3D_SS or HWC_HINT_DRAW_S3D_TB to tell
++     * Surfaceflinger that currently a S3D video layer is being drawn so
++     * convert the other layers to S3D format of Video while composing
++     *
++     */
++    HWC_HINT_DRAW_S3D_SIDE_BY_SIDE    = 0x00000004,
++    HWC_HINT_DRAW_S3D_TOP_BOTTOM      = 0x00000008
++#else
+     HWC_HINT_CLEAR_FB       = 0x00000002
++#endif
+ };
+ 
+ /*
+@@ -160,6 +173,11 @@ typedef struct hwc_layer {
+     /* blending to apply during composition */
+     int32_t blending;
+ 
++#ifdef QCOM_HARDWARE
++    /* alpha value of the layer */
++    int32_t alpha;
++#endif
++
+     /* area of the source to consider, the origin is the top-left corner of
+      * the buffer */
+     hwc_rect_t sourceCrop;
+@@ -187,6 +205,13 @@ enum {
+      * passed to (*prepare)() has changed by more than just the buffer handles.
+      */
+     HWC_GEOMETRY_CHANGED = 0x00000001,
++#ifdef QCOM_HARDWARE
++    /*
++     * HWC_SKIP_COMPOSITION is set by the HWC to indicate to SurfaceFlinger to
++     * skip composition for this iteration.
++     */
++    HWC_SKIP_COMPOSITION = 0x00000002
++#endif
+ };
+ 
+ /*
+@@ -331,6 +356,14 @@ typedef struct hwc_composer_device {
+ 
+     void* reserved_proc[6];
+ 
++#ifdef QCOM_HARDWARE
++    /*
++     * This API is called by Surfaceflinger to inform the HWC about the
++     * custom events(external display).
++     */
++    void (*perform)(struct hwc_composer_device* dev, int event, int value);
++#endif
++
+ } hwc_composer_device_t;
+ 

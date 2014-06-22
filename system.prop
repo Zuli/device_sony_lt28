@@ -1,0 +1,15 @@
+
+# Addon Properties for lt28
+# Graphics
+ro.sf.lcd_density=320
+com.qc.hardware=true
+debug.sf.hw=1
+debug.enabletr=true
+#debug.composition.type=dyn
+ro.sf.compbypass.enable=1
+ro.hwui.text_cache_width=2048
+ro.hdmi.enable=false
+com.qc.hdmi_out=false
+
+# system prop for opengles version
+ro.opengles.version=131072
