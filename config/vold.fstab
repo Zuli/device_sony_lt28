@@ -1,0 +1,5 @@
+
+dev_mount sdcard /mnt/sdcard 18 /devices/platform/msm_sdcc.1/mmc_host/mmc0
+dev_mount external_sd /mnt/external_sd auto /devices/platform/msm_sdcc.3/mmc_host
+dev_mount usbdisk /mnt/usbdisk auto /devices/platform/msm_hsusb_host.0
+

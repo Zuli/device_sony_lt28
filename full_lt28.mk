@@ -1,4 +1,6 @@
 
+DEVICE_PACKAGE_OVERLAYS += device/sony/lt28/overlay
+
 PRODUCT_PACKAGES := \
     lights.msm8660
 
@@ -62,6 +64,14 @@ PRODUCT_COPY_FILES += \
    $(LOCAL_PATH)/config/keypad-pmic-fuji.kl:system/usr/keylayout/keypad-pmic-fuji.kl \
    $(LOCAL_PATH)/config/pmic8058_pwrkey.kl:system/usr/keylayout/pmic8058_pwrkey.kl \
    $(LOCAL_PATH)/config/simple_remote.kl:system/usr/keylayout/simple_remote.kl
+
+# USB and external device
+PRODUCT_COPY_FILES += \
+   $(LOCAL_PATH)/config/vold.fstab:system/etc/vold.fstab
+
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.sys.usb.config=mtp,adb
+#    persist.sys.usb.config=mass_storage,adb
 
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base.mk)
 
