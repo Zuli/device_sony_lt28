@@ -36,7 +36,7 @@ LOCAL_SHARED_LIBRARIES := \
         libEGL \
         libskia
 
-LOCAL_C_INCLUDES := $(TOP)/hardware/qcom/display/libgralloc \
+LOCAL_C_INCLUDES := $(TOP)/device/sony/lt28/display/libgralloc \
                     $(TOP)/frameworks/base/services/surfaceflinger \
                     $(TOP)/external/skia/include/core \
                     $(TOP)/external/skia/include/images

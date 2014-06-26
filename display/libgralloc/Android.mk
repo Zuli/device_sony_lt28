@@ -23,8 +23,8 @@ LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_SHARED_LIBRARIES := liblog libcutils libGLESv1_CM libutils libmemalloc libQcomUI
 LOCAL_SHARED_LIBRARIES += libgenlock
 
-LOCAL_C_INCLUDES += hardware/qcom/display/libgenlock
-LOCAL_C_INCLUDES += hardware/qcom/display/libqcomui
+LOCAL_C_INCLUDES += device/sony/lt28/display/libgenlock
+LOCAL_C_INCLUDES += device/sony/lt28/display/libqcomui
 LOCAL_SRC_FILES :=  framebuffer.cpp \
                     gpu.cpp         \
                     gralloc.cpp     \
@@ -40,7 +40,7 @@ endif
 
 ifeq ($(TARGET_QCOM_HDMI_OUT),true)
     LOCAL_CFLAGS += -DHDMI_DUAL_DISPLAY -DQCOM_HDMI_OUT
-    LOCAL_C_INCLUDES += hardware/qcom/display/liboverlay
+    LOCAL_C_INCLUDES += device/sony/lt28/display/liboverlay
     LOCAL_SHARED_LIBRARIES += liboverlay
 endif
 

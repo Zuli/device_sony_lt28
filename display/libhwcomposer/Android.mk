@@ -15,11 +15,11 @@ LOCAL_SRC_FILES := 	\
 LOCAL_MODULE := hwcomposer.$(TARGET_BOARD_PLATFORM)
 LOCAL_CFLAGS:= -DLOG_TAG=\"$(TARGET_BOARD_PLATFORM).hwcomposer\" -DDEBUG_CALC_FPS
 
-LOCAL_C_INCLUDES += hardware/qcom/display/libgralloc
-LOCAL_C_INCLUDES += hardware/qcom/display/liboverlay
-LOCAL_C_INCLUDES += hardware/qcom/display/libcopybit
-LOCAL_C_INCLUDES += hardware/qcom/display/libgenlock
-LOCAL_C_INCLUDES += hardware/qcom/display/libqcomui
+LOCAL_C_INCLUDES += device/sony/lt28/display/libgralloc
+LOCAL_C_INCLUDES += device/sony/lt28/display/liboverlay
+LOCAL_C_INCLUDES += device/sony/lt28/display/libcopybit
+LOCAL_C_INCLUDES += device/sony/lt28/display/libgenlock
+LOCAL_C_INCLUDES += device/sony/lt28/display/libqcomui
 
 ifeq ($(TARGET_QCOM_HDMI_OUT),true)
 LOCAL_CFLAGS += -DHDMI_DUAL_DISPLAY
