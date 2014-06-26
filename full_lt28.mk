@@ -44,6 +44,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_AAPT_CONFIG := normal hdpi xhdpi
 PRODUCT_AAPT_PREF_CONFIG := xhdpi
 
+# Hardware config file
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/config/hw_config.sh:system/etc/hw_config.sh
+
 # QCOM Display
 PRODUCT_PACKAGES += \
     copybit.msm8660 \
@@ -54,6 +58,22 @@ PRODUCT_PACKAGES += \
     liboverlay \
     libQcomUI \
     libtilerenderer
+
+# Prebuilt Copy for Audio
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/lib/libaudioalsa.so:obj/lib/libaudioalsa.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbloader.so:obj/lib/libacdbloader.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:obj/lib/libacdbmapper.so \
+    $(LOCAL_PATH)/prebuilt/lib/libaudioalsa.so:system/lib/libaudioalsa.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbloader.so:system/lib/libacdbloader.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libacdbmapper.so \
+
+# Audio
+PRODUCT_PACKAGES += \
+    audio_policy.msm8660 \
+    audio.primary.msm8660 \
+    libaudioutils
+#    audio.a2dp.default \
 
 # Key layouts and touchscreen
 PRODUCT_COPY_FILES += \

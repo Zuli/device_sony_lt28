@@ -72,6 +72,10 @@ on post-fs
     chmod 0664 /sys/devices/platform/msm_sdcc.3/polling
     chmod 0664 /sys/devices/platform/msm_sdcc.4/polling
 
+    #Create QMUX deamon socket area
+    mkdir /dev/socket/qmux_audio 0770 media audio
+    chmod 2770 /dev/socket/qmux_audio
+
 on post-fs-data
     # nvimport
     mkdir /data/etc 0775 root root
@@ -103,3 +107,8 @@ on init
     mkdir /mnt/usbdisk 0755 system system
 
     export EXTERNAL_STORAGE /mnt/sdcard
+
+service hw_config /system/bin/sh /system/etc/hw_config.sh
+    class main
+    user root
+    oneshot
