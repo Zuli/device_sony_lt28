@@ -64,8 +64,8 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/lib/libaudioalsa.so:system/lib/libaudioalsa.so \
     $(LOCAL_PATH)/prebuilt/lib/libacdbloader.so:system/lib/libacdbloader.so \
     $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libacdbmapper.so \
-    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libaudcal.so \
-    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libdiag.so
+    $(LOCAL_PATH)/prebuilt/lib/libaudcal.so:system/lib/libaudcal.so \
+    $(LOCAL_PATH)/prebuilt/lib/libdiag.so:system/lib/libdiag.so
 
 # Audio firmware
 PRODUCT_COPY_FILES += \
