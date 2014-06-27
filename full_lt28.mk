@@ -24,6 +24,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/lib/egl/libGLESv2_adreno200.so:system/lib/egl/libGLESv2_adreno200.so \
     $(LOCAL_PATH)/prebuilt/lib/egl/libq3dtools_adreno200.so:system/lib/egl/libq3dtools_adreno200.so
 
+# Display firmware
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/etc/firmware/yamato_pfp.fw:system/etc/firmware/yamato_pfp.fw \
     $(LOCAL_PATH)/prebuilt/etc/firmware/yamato_pm4.fw:system/etc/firmware/yamato_pm4.fw \
@@ -54,6 +55,35 @@ PRODUCT_PACKAGES += \
     liboverlay \
     libQcomUI \
     libtilerenderer
+
+# Prebuilt Copy for Audio
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/lib/libaudioalsa.so:obj/lib/libaudioalsa.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbloader.so:obj/lib/libacdbloader.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:obj/lib/libacdbmapper.so \
+    $(LOCAL_PATH)/prebuilt/lib/libaudioalsa.so:system/lib/libaudioalsa.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbloader.so:system/lib/libacdbloader.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libacdbmapper.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libaudcal.so \
+    $(LOCAL_PATH)/prebuilt/lib/libacdbmapper.so:system/lib/libdiag.so
+
+# Audio firmware
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b00:system/etc/firmware/q6.b00 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b01:system/etc/firmware/q6.b01 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b02:system/etc/firmware/q6.b02 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b03:system/etc/firmware/q6.b03 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b04:system/etc/firmware/q6.b04 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b05:system/etc/firmware/q6.b05 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b06:system/etc/firmware/q6.b06 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.b07:system/etc/firmware/q6.b07 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/q6.mdt:system/etc/firmware/q6.mdt
+
+# Audio
+PRODUCT_PACKAGES += \
+    audio_policy.msm8660 \
+    audio.primary.msm8660 \
+    libaudioutils
 
 # Key layouts and touchscreen
 PRODUCT_COPY_FILES += \
