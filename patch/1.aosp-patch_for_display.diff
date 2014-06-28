@@ -32,17 +32,47 @@ index 41e60ea..bca4be5 100644
 
 project frameworks/base/
 diff --git a/graphics/jni/android_renderscript_RenderScript.cpp b/graphics/jni/android_renderscript_RenderScript.cpp
-index af03ee2..2644a2d 100644
+index af03ee2..79e7867 100644
 --- a/graphics/jni/android_renderscript_RenderScript.cpp
 +++ b/graphics/jni/android_renderscript_RenderScript.cpp
-@@ -568,6 +568,7 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
+@@ -567,7 +567,8 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
+     jint len = _env->GetArrayLength(data);
      LOG_API("nAllocationElementData1D, con(%p), alloc(%p), offset(%i), comp(%i), len(%i), sizeBytes(%i)", con, (RsAllocation)alloc, offset, compIdx, len, sizeBytes);
      jbyte *ptr = _env->GetByteArrayElements(data, NULL);
-     rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
-+    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
+-    rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
++    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
++    rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
      _env->ReleaseByteArrayElements(data, ptr, JNI_ABORT);
  }
  
+diff --git a/include/ui/FramebufferNativeWindow.h b/include/ui/FramebufferNativeWindow.h
+index 302d012..565561f 100644
+--- a/include/ui/FramebufferNativeWindow.h
++++ b/include/ui/FramebufferNativeWindow.h
+@@ -30,7 +30,11 @@
+ 
+ #include <ui/egl/android_natives.h>
+ 
++#ifdef QCOM_HARDWARE
++#define NUM_FRAMEBUFFERS_MAX  3
++#else
+ #define NUM_FRAME_BUFFERS  2
++#endif
+ 
+ extern "C" EGLNativeWindowType android_createDisplaySurface(void);
+ 
+@@ -76,7 +80,11 @@ private:
+     framebuffer_device_t* fbDev;
+     alloc_device_t* grDev;
+ 
++#ifdef QCOM_HARDWARE
++    sp<NativeBuffer> buffers[NUM_FRAMEBUFFERS_MAX];
++#else
+     sp<NativeBuffer> buffers[NUM_FRAME_BUFFERS];
++#endif
+     sp<NativeBuffer> front;
+     
+     mutable Mutex mutex;
 diff --git a/libs/hwui/OpenGLRenderer.cpp b/libs/hwui/OpenGLRenderer.cpp
 index 4d22646..d8f0815 100644
 --- a/libs/hwui/OpenGLRenderer.cpp
@@ -76,6 +106,120 @@ index 2fc88e1..da4f034 100644
      ANDROID_API void prepare(bool opaque);
      virtual void prepareDirty(float left, float top, float right, float bottom, bool opaque);
      virtual void finish();
+diff --git a/libs/ui/FramebufferNativeWindow.cpp b/libs/ui/FramebufferNativeWindow.cpp
+index 8949730..5204174 100644
+--- a/libs/ui/FramebufferNativeWindow.cpp
++++ b/libs/ui/FramebufferNativeWindow.cpp
+@@ -97,9 +97,17 @@ FramebufferNativeWindow::FramebufferNativeWindow()
+         mUpdateOnDemand = (fbDev->setUpdateRect != 0);
+         
+         // initialize the buffer FIFO
++#ifdef QCOM_HARDWARE
++        mNumBuffers = fbDev->numFramebuffers;
++        mNumFreeBuffers = mNumBuffers;
++        mBufferHead = 0;
++
++        LOGD("mNumBuffers = %d", mNumBuffers);
++#else
+         mNumBuffers = NUM_FRAME_BUFFERS;
+         mNumFreeBuffers = NUM_FRAME_BUFFERS;
+         mBufferHead = mNumBuffers-1;
++#endif
+ 
+         for (i = 0; i < mNumBuffers; i++)
+         {
+@@ -142,15 +150,26 @@ FramebufferNativeWindow::FramebufferNativeWindow()
+     ANativeWindow::queueBuffer = queueBuffer;
+     ANativeWindow::query = query;
+     ANativeWindow::perform = perform;
++#ifdef QCOM_HARDWARE
++    ANativeWindow::cancelBuffer = NULL;
++#endif
+ }
+ 
+ FramebufferNativeWindow::~FramebufferNativeWindow() 
+ {
+     if (grDev) {
++#ifdef QCOM_HARDWARE
++       for(int i = 0; i < mNumBuffers; i++) {
++            if (buffers[i] != NULL) {
++                grDev->free(grDev, buffers[i]->handle);
++            }
++        }
++#else
+         if (buffers[0] != NULL)
+             grDev->free(grDev, buffers[0]->handle);
+         if (buffers[1] != NULL)
+             grDev->free(grDev, buffers[1]->handle);
++#endif
+         gralloc_close(grDev);
+     }
+ 
+@@ -204,20 +223,39 @@ int FramebufferNativeWindow::dequeueBuffer(ANativeWindow* window,
+         ANativeWindowBuffer** buffer)
+ {
+     FramebufferNativeWindow* self = getSelf(window);
++#ifndef QCOM_HARDWARE
+     Mutex::Autolock _l(self->mutex);
++#endif
+     framebuffer_device_t* fb = self->fbDev;
+ 
++#ifdef QCOM_HARDWARE
++    int index = self->mBufferHead;
++#else
+     int index = self->mBufferHead++;
+     if (self->mBufferHead >= self->mNumBuffers)
+         self->mBufferHead = 0;
++#endif
+ 
+     GraphicLog& logger(GraphicLog::getInstance());
+     logger.log(GraphicLog::SF_FB_DEQUEUE_BEFORE, index);
+ 
++#ifdef QCOM_HARDWARE
++    /* The buffer is available, return it */
++    Mutex::Autolock _l(self->mutex);
++
++    // wait if the number of free buffers <= 0
++    while (self->mNumFreeBuffers <= 0) {
++#else
+     // wait for a free buffer
+     while (!self->mNumFreeBuffers) {
++#endif
+         self->mCondition.wait(self->mutex);
+     }
++#ifdef QCOM_HARDWARE
++    self->mBufferHead++;
++    if (self->mBufferHead >= self->mNumBuffers)
++        self->mBufferHead = 0;
++#endif
+     // get this buffer
+     self->mNumFreeBuffers--;
+     self->mCurrentBufferIndex = index;
+@@ -232,17 +270,23 @@ int FramebufferNativeWindow::lockBuffer(ANativeWindow* window,
+         ANativeWindowBuffer* buffer)
+ {
+     FramebufferNativeWindow* self = getSelf(window);
++#ifdef QCOM_HARDWARE
++    framebuffer_device_t* fb = self->fbDev;
++#endif
+     Mutex::Autolock _l(self->mutex);
+ 
+     const int index = self->mCurrentBufferIndex;
+     GraphicLog& logger(GraphicLog::getInstance());
+     logger.log(GraphicLog::SF_FB_LOCK_BEFORE, index);
+ 
++#ifdef QCOM_HARDWARE
++    fb->lockBuffer(fb, index);
++#else
+     // wait that the buffer we're locking is not front anymore
+     while (self->front == buffer) {
+         self->mCondition.wait(self->mutex);
+     }
+-
++#endif
+     logger.log(GraphicLog::SF_FB_LOCK_AFTER, index);
+ 
+     return NO_ERROR;
 diff --git a/opengl/include/EGL/eglext.h b/opengl/include/EGL/eglext.h
 index ca11863..9522f2f 100644
 --- a/opengl/include/EGL/eglext.h
@@ -232,6 +376,19 @@ index 2b0ed5d..252668b 100644
  
  // ----------------------------------------------------------------------------
  // NVIDIA extensions
+diff --git a/services/surfaceflinger/SurfaceTextureLayer.cpp b/services/surfaceflinger/SurfaceTextureLayer.cpp
+index 5020e00..93f16a8 100644
+--- a/services/surfaceflinger/SurfaceTextureLayer.cpp
++++ b/services/surfaceflinger/SurfaceTextureLayer.cpp
+@@ -106,7 +106,7 @@ status_t SurfaceTextureLayer::connect(int api,
+ #endif
+                 // fall through to set synchronous mode when not defaulting to
+                 // async mode.
+-            deafult:
++            default:
+                 err = setSynchronousMode(true);
+                 break;
+         }
 
 project hardware/libhardware/
 diff --git a/include/hardware/fb.h b/include/hardware/fb.h
