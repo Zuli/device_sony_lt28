@@ -4,7 +4,8 @@
 ro.sf.lcd_density=320
 com.qc.hardware=true
 debug.sf.hw=1
-debug.enabletr=true
+# No tilerender function, disable now
+#debug.enabletr=true
 debug.composition.type=dyn
 ro.sf.compbypass.enable=1
 ro.hwui.text_cache_width=2048

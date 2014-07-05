@@ -31,17 +31,71 @@ index 41e60ea..bca4be5 100644
  FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
 
 project frameworks/base/
+diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java
+index 71f3cf5..5d88f6b 100644
+--- a/core/java/android/view/HardwareRenderer.java
++++ b/core/java/android/view/HardwareRenderer.java
+@@ -441,6 +441,8 @@ public abstract class HardwareRenderer {
+         }
+ 
+         boolean mDirtyRegionsEnabled;
++        boolean mUpdateDirtyRegions;
++
+         final boolean mVsyncDisabled;
+ 
+         final int mGlVersion;
+@@ -673,6 +675,12 @@ public abstract class HardwareRenderer {
+                         + GLUtils.getEGLErrorString(sEgl.eglGetError()));
+             }
+             
++            enableDirtyRegions();
++
++            return mEglContext.getGL();
++        }
++
++        private void enableDirtyRegions() {
+             initCaches();
+ 
+             // If mDirtyRegions is set, this means we have an EGL configuration
+@@ -690,8 +698,6 @@ public abstract class HardwareRenderer {
+                 // configuration (see RENDER_DIRTY_REGIONS)
+                 mDirtyRegionsEnabled = GLES20Canvas.isBackBufferPreserved();
+             }
+-
+-            return mEglContext.getGL();
+         }
+ 
+         abstract void initCaches();
+@@ -745,6 +751,9 @@ public abstract class HardwareRenderer {
+                 if (!createSurface(holder)) {
+                     return;
+                 }
++
++                mUpdateDirtyRegions = true;
++
+                 if (mCanvas != null) {
+                     setEnabled(true);
+                 }
+@@ -906,6 +915,10 @@ public abstract class HardwareRenderer {
+                     fallback(true);
+                     return SURFACE_STATE_ERROR;
+                 } else {
++                    if (mUpdateDirtyRegions) {
++                        enableDirtyRegions();
++                        mUpdateDirtyRegions = false;
++                    }
+                     return SURFACE_STATE_UPDATED;
+                 }
+             }
 diff --git a/graphics/jni/android_renderscript_RenderScript.cpp b/graphics/jni/android_renderscript_RenderScript.cpp
-index af03ee2..79e7867 100644
+index af03ee2..2644a2d 100644
 --- a/graphics/jni/android_renderscript_RenderScript.cpp
 +++ b/graphics/jni/android_renderscript_RenderScript.cpp
-@@ -567,7 +567,8 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
-     jint len = _env->GetArrayLength(data);
+@@ -568,6 +568,7 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
      LOG_API("nAllocationElementData1D, con(%p), alloc(%p), offset(%i), comp(%i), len(%i), sizeBytes(%i)", con, (RsAllocation)alloc, offset, compIdx, len, sizeBytes);
      jbyte *ptr = _env->GetByteArrayElements(data, NULL);
--    rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
-+    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
-+    rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
+     rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
++    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
      _env->ReleaseByteArrayElements(data, ptr, JNI_ABORT);
  }
  
@@ -107,7 +161,7 @@ index 2fc88e1..da4f034 100644
      virtual void prepareDirty(float left, float top, float right, float bottom, bool opaque);
      virtual void finish();
 diff --git a/libs/ui/FramebufferNativeWindow.cpp b/libs/ui/FramebufferNativeWindow.cpp
-index 8949730..5204174 100644
+index 8949730..3a48428 100644
 --- a/libs/ui/FramebufferNativeWindow.cpp
 +++ b/libs/ui/FramebufferNativeWindow.cpp
 @@ -97,9 +97,17 @@ FramebufferNativeWindow::FramebufferNativeWindow()
@@ -128,15 +182,7 @@ index 8949730..5204174 100644
  
          for (i = 0; i < mNumBuffers; i++)
          {
-@@ -142,15 +150,26 @@ FramebufferNativeWindow::FramebufferNativeWindow()
-     ANativeWindow::queueBuffer = queueBuffer;
-     ANativeWindow::query = query;
-     ANativeWindow::perform = perform;
-+#ifdef QCOM_HARDWARE
-+    ANativeWindow::cancelBuffer = NULL;
-+#endif
- }
- 
+@@ -147,10 +155,18 @@ FramebufferNativeWindow::FramebufferNativeWindow()
  FramebufferNativeWindow::~FramebufferNativeWindow() 
  {
      if (grDev) {
@@ -155,47 +201,7 @@ index 8949730..5204174 100644
          gralloc_close(grDev);
      }
  
-@@ -204,20 +223,39 @@ int FramebufferNativeWindow::dequeueBuffer(ANativeWindow* window,
-         ANativeWindowBuffer** buffer)
- {
-     FramebufferNativeWindow* self = getSelf(window);
-+#ifndef QCOM_HARDWARE
-     Mutex::Autolock _l(self->mutex);
-+#endif
-     framebuffer_device_t* fb = self->fbDev;
- 
-+#ifdef QCOM_HARDWARE
-+    int index = self->mBufferHead;
-+#else
-     int index = self->mBufferHead++;
-     if (self->mBufferHead >= self->mNumBuffers)
-         self->mBufferHead = 0;
-+#endif
- 
-     GraphicLog& logger(GraphicLog::getInstance());
-     logger.log(GraphicLog::SF_FB_DEQUEUE_BEFORE, index);
- 
-+#ifdef QCOM_HARDWARE
-+    /* The buffer is available, return it */
-+    Mutex::Autolock _l(self->mutex);
-+
-+    // wait if the number of free buffers <= 0
-+    while (self->mNumFreeBuffers <= 0) {
-+#else
-     // wait for a free buffer
-     while (!self->mNumFreeBuffers) {
-+#endif
-         self->mCondition.wait(self->mutex);
-     }
-+#ifdef QCOM_HARDWARE
-+    self->mBufferHead++;
-+    if (self->mBufferHead >= self->mNumBuffers)
-+        self->mBufferHead = 0;
-+#endif
-     // get this buffer
-     self->mNumFreeBuffers--;
-     self->mCurrentBufferIndex = index;
-@@ -232,17 +270,23 @@ int FramebufferNativeWindow::lockBuffer(ANativeWindow* window,
+@@ -232,17 +248,23 @@ int FramebufferNativeWindow::lockBuffer(ANativeWindow* window,
          ANativeWindowBuffer* buffer)
  {
      FramebufferNativeWindow* self = getSelf(window);
