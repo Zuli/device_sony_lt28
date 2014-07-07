@@ -1,0 +1,63 @@
+diff --git a/Android.mk b/Android.mk
+index bba6122..fc13c15 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -31,6 +31,10 @@ common_shared_libraries := \
+ 
+ include $(CLEAR_VARS)
+ 
++ifneq ($(BOARD_VOLD_MAX_PARTITIONS),)
++LOCAL_CFLAGS += -DVOLD_MAX_PARTITIONS=$(BOARD_VOLD_MAX_PARTITIONS)
++endif
++
+ LOCAL_MODULE := libvold
+ 
+ LOCAL_SRC_FILES := $(common_src_files)
+@@ -55,6 +59,10 @@ LOCAL_C_INCLUDES := $(common_c_includes)
+ 
+ LOCAL_CFLAGS := 
+ 
++ifneq ($(BOARD_VOLD_MAX_PARTITIONS),)
++LOCAL_CFLAGS += -DVOLD_MAX_PARTITIONS=$(BOARD_VOLD_MAX_PARTITIONS)
++endif
++
+ LOCAL_SHARED_LIBRARIES := $(common_shared_libraries)
+ 
+ include $(BUILD_EXECUTABLE)
+diff --git a/DirectVolume.cpp b/DirectVolume.cpp
+index 4acee76..eb41699 100644
+--- a/DirectVolume.cpp
++++ b/DirectVolume.cpp
+@@ -207,8 +207,8 @@ void DirectVolume::handlePartitionAdded(const char *devpath, NetlinkEvent *evt)
+ #ifdef PARTITION_DEBUG
+     SLOGD("Dv:partAdd: part_num = %d, minor = %d\n", part_num, minor);
+ #endif
+-    if (part_num >= MAX_PARTITIONS) {
+-        SLOGE("Dv:partAdd: ignoring part_num = %d (max: %d)\n", part_num, MAX_PARTITIONS-1);
++    if (part_num > MAX_PARTITIONS) {
++        SLOGE("Dv:partAdd: ignoring part_num = %d (max: %d)\n", part_num, MAX_PARTITIONS);
+     } else {
+         mPartMinors[part_num -1] = minor;
+     }
+diff --git a/DirectVolume.h b/DirectVolume.h
+index de1ed8b..ee86fba 100644
+--- a/DirectVolume.h
++++ b/DirectVolume.h
+@@ -21,13 +21,15 @@
+ 
+ #include "Volume.h"
+ 
+-#define MAX_PARTS 4
++#ifndef VOLD_MAX_PARTITIONS
++#define VOLD_MAX_PARTITIONS 4
++#endif
+ 
+ typedef android::List<char *> PathCollection;
+ 
+ class DirectVolume : public Volume {
+ public:
+-    static const int MAX_PARTITIONS = 4;
++    static const int MAX_PARTITIONS = VOLD_MAX_PARTITIONS;
+ protected:
+     PathCollection *mPaths;
+     int            mDiskMajor;

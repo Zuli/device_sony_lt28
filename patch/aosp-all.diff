@@ -32,7 +32,7 @@ index 41e60ea..bca4be5 100644
 
 project frameworks/base/
 diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java
-index 71f3cf5..5d88f6b 100644
+index 71f3cf5..0b47393 100644
 --- a/core/java/android/view/HardwareRenderer.java
 +++ b/core/java/android/view/HardwareRenderer.java
 @@ -441,6 +441,8 @@ public abstract class HardwareRenderer {
@@ -44,19 +44,19 @@ index 71f3cf5..5d88f6b 100644
          final boolean mVsyncDisabled;
  
          final int mGlVersion;
-@@ -673,6 +675,12 @@ public abstract class HardwareRenderer {
-                         + GLUtils.getEGLErrorString(sEgl.eglGetError()));
-             }
+@@ -675,6 +677,12 @@ public abstract class HardwareRenderer {
              
+             initCaches();
+ 
 +            enableDirtyRegions();
 +
 +            return mEglContext.getGL();
 +        }
 +
 +        private void enableDirtyRegions() {
-             initCaches();
- 
              // If mDirtyRegions is set, this means we have an EGL configuration
+             // with EGL_SWAP_BEHAVIOR_PRESERVED_BIT set
+             if (sDirtyRegions) {
 @@ -690,8 +698,6 @@ public abstract class HardwareRenderer {
                  // configuration (see RENDER_DIRTY_REGIONS)
                  mDirtyRegionsEnabled = GLES20Canvas.isBackBufferPreserved();

@@ -1,0 +1,27 @@
+#!/bin/sh
+# This is patch apply script for 'android-4.0.4_r2.1' and device lt28
+
+PATCH_LOCATION=device/sony/lt28/patch/project_patches
+
+croot
+cp $PATCH_LOCATION/kernel.mk build/core/tasks
+
+croot
+cd build
+git apply ../$PATCH_LOCATION/build.patch
+
+croot
+cd frameworks/base
+git apply ../../$PATCH_LOCATION/frameworks_base.patch
+
+croot
+cd hardware/libhardware
+git apply ../../$PATCH_LOCATION/hardware_libhardware.patch
+
+croot
+cd system/core
+git apply ../../$PATCH_LOCATION/system_core.patch
+
+croot
+cd system/vold
+git apply ../../$PATCH_LOCATION/system_vold.patch
