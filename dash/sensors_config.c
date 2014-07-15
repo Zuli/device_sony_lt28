@@ -145,12 +145,12 @@ int sensors_config_read(char* filename)
 			"%64[^\n]", new_entry->prefix,
 			new_entry->key, new_entry->value) == 3) {
 			insert_entry(new_entry);
-		} else if (sscanf(buf, "%64[^ \n]", new_entry->prefix) == 1) {
+		} /*else if (sscanf(buf, "%64[^ \n]", new_entry->prefix) == 1) {
 			ALOGE("Parse error: %s", buf);
 			free(new_entry);
 			sensors_config_destroy();
 			retval = -1;
-		} else {
+		} */else {
 			free(new_entry);
 		}
 
