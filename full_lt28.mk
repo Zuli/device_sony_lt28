@@ -87,17 +87,29 @@ PRODUCT_PACKAGES += \
 
 # Key layouts and touchscreen
 PRODUCT_COPY_FILES += \
-   $(LOCAL_PATH)/config/clearpad.kl:system/usr/keylayout/clearpad.kl \
-   $(LOCAL_PATH)/config/clearpad.idc:system/usr/idc/clearpad.idc \
-   $(LOCAL_PATH)/config/fuji-keypad.kl:system/usr/keylayout/fuji-keypad.kl \
-   $(LOCAL_PATH)/config/gpio-key.kl:system/usr/keylayout/gpio-key.kl \
-   $(LOCAL_PATH)/config/keypad-pmic-fuji.kl:system/usr/keylayout/keypad-pmic-fuji.kl \
-   $(LOCAL_PATH)/config/pmic8058_pwrkey.kl:system/usr/keylayout/pmic8058_pwrkey.kl \
-   $(LOCAL_PATH)/config/simple_remote.kl:system/usr/keylayout/simple_remote.kl
+    $(LOCAL_PATH)/config/clearpad.kl:system/usr/keylayout/clearpad.kl \
+    $(LOCAL_PATH)/config/clearpad.idc:system/usr/idc/clearpad.idc \
+    $(LOCAL_PATH)/config/fuji-keypad.kl:system/usr/keylayout/fuji-keypad.kl \
+    $(LOCAL_PATH)/config/gpio-key.kl:system/usr/keylayout/gpio-key.kl \
+    $(LOCAL_PATH)/config/keypad-pmic-fuji.kl:system/usr/keylayout/keypad-pmic-fuji.kl \
+    $(LOCAL_PATH)/config/pmic8058_pwrkey.kl:system/usr/keylayout/pmic8058_pwrkey.kl \
+    $(LOCAL_PATH)/config/simple_remote.kl:system/usr/keylayout/simple_remote.kl
 
 # USB and external device
 PRODUCT_COPY_FILES += \
    $(LOCAL_PATH)/config/vold.fstab:system/etc/vold.fstab
+
+# Sensors
+PRODUCT_PACKAGES += \
+    sensors.default
+
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/config/sensors.conf:system/etc/sensors.conf \
+    frameworks/base/data/etc/android.hardware.sensor.accelerometer.xml:system/etc/permissions/android.hardware.sensor.accelerometer.xml \
+    frameworks/base/data/etc/android.hardware.sensor.compass.xml:system/etc/permissions/android.hardware.sensor.compass.xml \
+    frameworks/base/data/etc/android.hardware.sensor.gyroscope.xml:system/etc/permissions/android.hardware.sensor.gyroscope.xml \
+    frameworks/base/data/etc/android.hardware.sensor.light.xml:system/etc/permissions/android.hardware.sensor.light.xml \
+    frameworks/base/data/etc/android.hardware.sensor.proximity.xml:system/etc/permissions/android.hardware.sensor.proximity.xml
 
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp,adb

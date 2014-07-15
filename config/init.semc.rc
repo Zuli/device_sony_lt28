@@ -58,14 +58,33 @@ on early-boot
     chown system graphics /sys/devices/virtual/graphics/fb1/product_description
     chown system graphics /sys/devices/virtual/graphics/fb1/vendor_name
 
+    # Permissions for AKM897x sensor
+    chown system system /data/misc/akm_set.txt
+    chown system system /sys/class/compass/akm8972/interval
+    chown system system /sys/class/compass/akm8972/single
+    chown system system /sys/class/compass/akm8972/registers
+    chown system system /sys/class/compass/akm8975/interval
+    chown system system /sys/class/compass/akm8975/single
+    chown system system /sys/class/compass/akm8975/registers
+
 on boot
     write /proc/sys/kernel/sysrq 0
     write /proc/sys/kernel/watchdog_thresh 5
 
-    chown root.system /sys/devices/system/cpu/mfreq
-    chmod 220 /sys/devices/system/cpu/mfreq
-    chown root.system /sys/devices/system/cpu/cpu1/online
-    chmod 664 /sys/devices/system/cpu/cpu1/online
+    # LM35xx/cameralight
+    chown system camera /sys/devices/i2c-3/3-0053/torch_enable
+    chown system camera /sys/devices/i2c-3/3-0053/torch_current
+    chown system camera /sys/devices/i2c-3/3-0053/privacy_enable
+    chown system camera /sys/devices/i2c-3/3-0053/privacy_current
+    chown system camera /sys/devices/i2c-3/3-0053/flash_enable
+    chown system camera /sys/devices/i2c-3/3-0053/flash_duration
+    chown system camera /sys/devices/i2c-3/3-0053/flash_synchronization
+    chown system camera /sys/devices/i2c-3/3-0053/flash_current
+    chown system camera /sys/devices/i2c-3/3-0053/status
+
+    # Owner for the proximity sensor
+    chown system system /sys/devices/i2c-3/3-0054/threshold
+    chown system system /sys/devices/i2c-3/3-0054/nburst
 
 on post-fs
     chmod 0664 /sys/devices/platform/msm_sdcc.1/polling
