@@ -1,1 +1,2 @@
 add_lunch_combo full_lt28-userdebug
+add_lunch_combo full_lt28-eng
