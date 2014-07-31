@@ -99,6 +99,76 @@ index af03ee2..2644a2d 100644
      _env->ReleaseByteArrayElements(data, ptr, JNI_ABORT);
  }
  
+diff --git a/include/media/stagefright/ColorConverter.h b/include/media/stagefright/ColorConverter.h
+index 85ba920..5ebf1f7 100644
+--- a/include/media/stagefright/ColorConverter.h
++++ b/include/media/stagefright/ColorConverter.h
+@@ -83,6 +83,51 @@ private:
+     ColorConverter &operator=(const ColorConverter &);
+ };
+ 
++#ifdef QCOM_HARDWARE
++//------------------------------------------
++enum ColorConvertFormat {
++    RGB565 = 1,
++    YCbCr420Tile,
++    YCbCr420SP,
++    YCbCr420P,
++    YCrCb420P,
++};
++
++/* 64 bit flag variable, reserving bits as needed */
++enum ColorConvertFlags {
++    COLOR_CONVERT_ALIGN_NONE = 1,
++    COLOR_CONVERT_CENTER_OUTPUT = 1<<1,
++    COLOR_CONVERT_ALIGN_16 =   1<<4,
++    COLOR_CONVERT_ALIGN_2048 = 1<<11,
++    COLOR_CONVERT_ALIGN_8192 = 1<<13,
++};
++
++struct ColorConvertParams {
++    size_t width;
++    size_t height;
++
++    size_t cropWidth;
++    size_t cropHeight;
++
++    size_t cropLeft;
++    size_t cropRight;
++    size_t cropTop;
++    size_t cropBottom;
++
++    ColorConvertFormat colorFormat;
++    const void * data;
++    int fd;
++
++    uint64_t flags;
++};
++
++typedef int (* ConvertFn)(ColorConvertParams src,
++                          ColorConvertParams dst, uint8_t *adjustedClip);
++
++int convert(ColorConvertParams src, ColorConvertParams dst,
++            uint8_t *adjustedClip);
++#endif
++
+ }  // namespace android
+ 
+ #endif  // COLOR_CONVERTER_H_
+diff --git a/include/media/stagefright/openmax/OMX_IVCommon.h b/include/media/stagefright/openmax/OMX_IVCommon.h
+index 8bb4ded..0eb9fd2 100644
+--- a/include/media/stagefright/openmax/OMX_IVCommon.h
++++ b/include/media/stagefright/openmax/OMX_IVCommon.h
+@@ -159,6 +159,9 @@ typedef enum OMX_COLOR_FORMATTYPE {
+     OMX_COLOR_FormatAndroidOpaque = 0x7F000789,
+     OMX_TI_COLOR_FormatYUV420PackedSemiPlanar = 0x7F000100,
+     OMX_QCOM_COLOR_FormatYVU420SemiPlanar = 0x7FA30C00,
++#ifdef QCOM_HARDWARE
++    QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka = 0x7FA30C03,
++#endif
+     OMX_COLOR_FormatMax = 0x7FFFFFFF
+ } OMX_COLOR_FORMATTYPE;
+ 
 diff --git a/include/ui/FramebufferNativeWindow.h b/include/ui/FramebufferNativeWindow.h
 index 302d012..565561f 100644
 --- a/include/ui/FramebufferNativeWindow.h
@@ -226,6 +296,187 @@ index 8949730..3a48428 100644
      logger.log(GraphicLog::SF_FB_LOCK_AFTER, index);
  
      return NO_ERROR;
+diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
+index 690deac..15d8300 100644
+--- a/media/libstagefright/Android.mk
++++ b/media/libstagefright/Android.mk
+@@ -148,6 +148,10 @@ LOCAL_SHARED_LIBRARIES += \
+ 
+ LOCAL_CFLAGS += -Wno-multichar
+ 
++ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
++        LOCAL_C_INCLUDES += $(TOP)/device/sony/lt28/display/libgralloc
++endif
++
+ LOCAL_MODULE:= libstagefright
+ 
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/media/libstagefright/OMXCodec.cpp b/media/libstagefright/OMXCodec.cpp
+old mode 100755
+new mode 100644
+index 86b3fe4..d5a1104
+--- a/media/libstagefright/OMXCodec.cpp
++++ b/media/libstagefright/OMXCodec.cpp
+@@ -44,6 +44,9 @@
+ #include <OMX_Audio.h>
+ #include <OMX_Component.h>
+ 
++#ifdef QCOM_HARDWARE
++#include <gralloc_priv.h>
++#endif
+ #include "include/avc_utils.h"
+ 
+ namespace android {
+@@ -1403,7 +1406,11 @@ status_t OMXCodec::setVideoOutputFormat(
+                || format.eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar
+                || format.eColorFormat == OMX_COLOR_FormatCbYCrY
+                || format.eColorFormat == OMX_TI_COLOR_FormatYUV420PackedSemiPlanar
+-               || format.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar);
++               || format.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar
++#ifdef QCOM_HARDWARE
++               || format.eColorFormat == QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka
++#endif
++               );
+ 
+         err = mOMX->setParameter(
+                 mNode, OMX_IndexParamVideoPortFormat,
+@@ -1842,11 +1849,23 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
+         return err;
+     }
+ 
++#ifdef QCOM_HARDWARE
++    int format = (def.format.video.eColorFormat ==
++                  QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka)?
++                 HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED : def.format.video.eColorFormat;
++    if(def.format.video.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar)
++        format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
++#endif
++
+     err = native_window_set_buffers_geometry(
+             mNativeWindow.get(),
+             def.format.video.nFrameWidth,
+             def.format.video.nFrameHeight,
++#ifdef QCOM_HARDWARE
++            format);
++#else
+             def.format.video.eColorFormat);
++#endif
+ 
+     if (err != 0) {
+         LOGE("native_window_set_buffers_geometry failed: %s (%d)",
+diff --git a/media/libstagefright/colorconversion/Android.mk b/media/libstagefright/colorconversion/Android.mk
+index 62ba40f..3e0305c 100644
+--- a/media/libstagefright/colorconversion/Android.mk
++++ b/media/libstagefright/colorconversion/Android.mk
+@@ -9,6 +9,10 @@ LOCAL_C_INCLUDES := \
+         $(TOP)/frameworks/base/include/media/stagefright/openmax \
+         $(TOP)/hardware/msm7k
+ 
++ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
++        LOCAL_C_INCLUDES += $(TOP)/device/sony/lt28/media/mm-core/omxcore/inc
++endif
++
+ LOCAL_MODULE:= libstagefright_color_conversion
+ 
+ include $(BUILD_STATIC_LIBRARY)
+diff --git a/media/libstagefright/colorconversion/ColorConverter.cpp b/media/libstagefright/colorconversion/ColorConverter.cpp
+index 5cc3f78..12cb998 100644
+--- a/media/libstagefright/colorconversion/ColorConverter.cpp
++++ b/media/libstagefright/colorconversion/ColorConverter.cpp
+@@ -22,6 +22,10 @@
+ #include <media/stagefright/MediaDebug.h>
+ #include <media/stagefright/MediaErrors.h>
+ 
++#ifdef QCOM_HARDWARE
++#include <dlfcn.h>
++#endif
++
+ namespace android {
+ 
+ ColorConverter::ColorConverter(
+@@ -47,6 +51,9 @@ bool ColorConverter::isValid() const {
+         case OMX_QCOM_COLOR_FormatYVU420SemiPlanar:
+         case OMX_COLOR_FormatYUV420SemiPlanar:
+         case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
++#ifdef QCOM_HARDWARE
++        case QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka:
++#endif
+             return true;
+ 
+         default:
+@@ -122,6 +129,58 @@ status_t ColorConverter::convert(
+             err = convertTIYUV420PackedSemiPlanar(src, dst);
+             break;
+ 
++#ifdef QCOM_HARDWARE
++        case QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka:
++            {
++                void * lib = dlopen("libmm-color-convertor.so", RTLD_NOW);
++
++                if (!lib) {
++                    LOGE("dlopen for libmm-color-convertor failed with errno %d", errno);
++                    return ERROR_UNSUPPORTED;
++                }
++
++
++                typedef int (*convertFn)(ColorConvertParams src, ColorConvertParams dst, uint8_t *adjustedClip);
++
++                convertFn convertNV12Tile = (convertFn)dlsym(lib, "_ZN7android7convertENS_18ColorConvertParamsES0_Ph");
++                if (!convertNV12Tile) {
++                    dlclose(lib);
++                    LOGE("dlsym on libmm-color-convertor failed with errno %d", errno);
++                    return ERROR_UNSUPPORTED;
++                }
++
++                struct ColorConvertParams srcTemp;
++                srcTemp.width = srcWidth;
++                srcTemp.height = srcHeight;
++                srcTemp.cropWidth = src.cropWidth();
++                srcTemp.cropHeight = src.cropHeight();
++                srcTemp.cropLeft = src.mCropLeft;
++                srcTemp.cropRight = src.mCropRight;
++                srcTemp.cropTop = src.mCropTop;
++                srcTemp.cropBottom = src.mCropBottom;
++                srcTemp.data = src.mBits;
++                srcTemp.colorFormat = YCbCr420Tile;
++                srcTemp.flags = 0;
++
++                struct ColorConvertParams dstTemp;
++                dstTemp.width = dstWidth;
++                dstTemp.height = dstHeight;
++                dstTemp.cropWidth = dst.cropWidth();
++                dstTemp.cropHeight = dst.cropHeight();
++                dstTemp.cropLeft = dst.mCropLeft;
++                dstTemp.cropRight = dst.mCropRight;
++                dstTemp.cropTop = dst.mCropTop;
++                dstTemp.cropBottom = dst.mCropBottom;
++                dstTemp.data = dst.mBits;
++                dstTemp.colorFormat = RGB565;
++                dstTemp.flags = 0;
++
++                uint8_t * adjustedClip = initClip();
++                err = convertNV12Tile(srcTemp, dstTemp, adjustedClip);
++                dlclose(lib);
++            }
++            break;
++#endif
+         default:
+         {
+             CHECK(!"Should not be here. Unknown color conversion.");
+diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
+index 0ff398a..977f979 100644
+--- a/media/libstagefright/omx/OMXNodeInstance.cpp
++++ b/media/libstagefright/omx/OMXNodeInstance.cpp
+@@ -455,7 +455,9 @@ status_t OMXNodeInstance::useGraphicBuffer2_l(
+         return UNKNOWN_ERROR;
+     }
+ 
++#ifndef QCOM_HARDWARE
+     CHECK_EQ(header->pBuffer, bufferHandle);
++#endif
+     CHECK_EQ(header->pAppPrivate, bufferMeta);
+ 
+     *buffer = header;
 diff --git a/opengl/include/EGL/eglext.h b/opengl/include/EGL/eglext.h
 index ca11863..9522f2f 100644
 --- a/opengl/include/EGL/eglext.h

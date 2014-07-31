@@ -85,6 +85,29 @@ PRODUCT_PACKAGES += \
     audio.primary.msm8660 \
     libaudioutils
 
+# Media
+PRODUCT_PACKAGES += \
+    libstagefrighthw \
+    libOmxCore \
+    libmm-omxcore \
+    libOmxAacEnc \
+    libOmxAmrEnc \
+    libdivxdrmdecrypt \
+    libOmxVdec \
+    libOmxVenc
+
+# Media firmware
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/vidc_1080p.fw:system/etc/firmware/vidc_1080p.fw
+
+# Media profiles
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/config/media_profiles.xml:system/etc/media_profiles.xml
+
+# Prebuilt Copy for Media
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/lib/libmm-color-convertor.so:system/lib/libmm-color-convertor.so
+
 # Key layouts and touchscreen
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/config/clearpad.kl:system/usr/keylayout/clearpad.kl \
@@ -97,7 +120,7 @@ PRODUCT_COPY_FILES += \
 
 # USB and external device
 PRODUCT_COPY_FILES += \
-   $(LOCAL_PATH)/config/vold.fstab:system/etc/vold.fstab
+    $(LOCAL_PATH)/config/vold.fstab:system/etc/vold.fstab
 
 # Sensors
 PRODUCT_PACKAGES += \
