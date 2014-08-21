@@ -29,6 +29,17 @@ index 41e60ea..bca4be5 100644
  MKYAFFS2 := $(HOST_OUT_EXECUTABLES)/mkyaffs2image$(HOST_EXECUTABLE_SUFFIX)
  APICHECK := $(HOST_OUT_EXECUTABLES)/apicheck$(HOST_EXECUTABLE_SUFFIX)
  FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
+diff --git a/core/legacy_prebuilts.mk b/core/legacy_prebuilts.mk
+index 41943b1..e72d711 100644
+--- a/core/legacy_prebuilts.mk
++++ b/core/legacy_prebuilts.mk
+@@ -123,4 +123,5 @@ GRANDFATHERED_ALL_PREBUILT := \
+ 	wl1271.bin \
+ 	zoneinfo.dat \
+ 	zoneinfo.idx \
+-	zoneinfo.version
++	zoneinfo.version \
++	bcm4330.ko
 
 project frameworks/base/
 diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java

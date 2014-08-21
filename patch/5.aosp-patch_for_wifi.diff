@@ -1,0 +1,13 @@
+
+project build/
+diff --git a/core/legacy_prebuilts.mk b/core/legacy_prebuilts.mk
+index 41943b1..e72d711 100644
+--- a/core/legacy_prebuilts.mk
++++ b/core/legacy_prebuilts.mk
+@@ -123,4 +123,5 @@ GRANDFATHERED_ALL_PREBUILT := \
+ 	wl1271.bin \
+ 	zoneinfo.dat \
+ 	zoneinfo.idx \
+-	zoneinfo.version
++	zoneinfo.version \
++	bcm4330.ko
