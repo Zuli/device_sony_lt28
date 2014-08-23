@@ -11,6 +11,10 @@ cd build
 git apply ../$PATCH_LOCATION/build.patch
 
 croot
+cd external/webkit
+git apply ../../$PATCH_LOCATION/external_webkit.patch
+
+croot
 cd frameworks/base
 git apply ../../$PATCH_LOCATION/frameworks_base.patch
 

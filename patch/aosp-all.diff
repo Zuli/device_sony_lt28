@@ -41,6 +41,53 @@ index 41943b1..e72d711 100644
 +	zoneinfo.version \
 +	bcm4330.ko
 
+project external/webkit/
+diff --git a/Source/WebCore/Android.mk b/Source/WebCore/Android.mk
+index 6542931..f4aa571 100644
+--- a/Source/WebCore/Android.mk
++++ b/Source/WebCore/Android.mk
+@@ -1258,3 +1258,8 @@ ifeq ($(SUPPORT_COMPLEX_SCRIPTS),true)
+ LOCAL_SRC_FILES := $(LOCAL_SRC_FILES) \
+ 	platform/graphics/android/HarfbuzzSkia.cpp
+ endif
++
++# HACK for qcom devices CPU upload mode
++ifeq ($(TARGET_FORCE_CPU_UPLOAD),true)
++LOCAL_CFLAGS += -DFORCE_CPU_UPLOAD
++endif
+diff --git a/Source/WebCore/platform/graphics/android/TransferQueue.cpp b/Source/WebCore/platform/graphics/android/TransferQueue.cpp
+index b20ec7a..a2fe31e 100644
+--- a/Source/WebCore/platform/graphics/android/TransferQueue.cpp
++++ b/Source/WebCore/platform/graphics/android/TransferQueue.cpp
+@@ -479,7 +479,11 @@ void TransferQueue::setTextureUploadType(TextureUploadType type)
+     discardQueue();
+ 
+     android::Mutex::Autolock lock(m_transferQueueItemLocks);
++#ifdef FORCE_CPU_UPLOAD
++    m_currentUploadType = CpuUpload; // force to cpu upload mode for now until gpu upload mode is fixed
++#else
+     m_currentUploadType = type;
++#endif
+     XLOGC("Now we set the upload to %s", m_currentUploadType == GpuUpload ? "GpuUpload" : "CpuUpload");
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/android/TransferQueue.h b/Source/WebCore/platform/graphics/android/TransferQueue.h
+index 63455de..41ab5b2 100644
+--- a/Source/WebCore/platform/graphics/android/TransferQueue.h
++++ b/Source/WebCore/platform/graphics/android/TransferQueue.h
+@@ -63,7 +63,11 @@ enum TextureUploadType {
+     GpuUpload = 1
+ };
+ 
++#ifdef FORCE_CPU_UPLOAD
++#define DEFAULT_UPLOAD_TYPE CpuUpload
++#else
+ #define DEFAULT_UPLOAD_TYPE GpuUpload
++#endif
+ 
+ class TileTransferData {
+ public:
+
 project frameworks/base/
 diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java
 index 71f3cf5..0b47393 100644
