@@ -150,6 +150,10 @@ PRODUCT_COPY_FILES += \
     frameworks/base/data/etc/android.hardware.wifi.direct.xml:system/etc/permissions/android.hardware.wifi.direct.xml \
     frameworks/base/data/etc/android.hardware.wifi.xml:system/etc/permissions/android.hardware.wifi.xml
 
+# Bluetooth config
+PRODUCT_COPY_FILES += \
+    system/bluetooth/data/main.conf:system/etc/bluetooth/main.conf
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp,adb
 #    persist.sys.usb.config=mass_storage,adb
@@ -161,5 +165,5 @@ $(call inherit-product, frameworks/base/build/phone-xhdpi-1024-dalvik-heap.mk)
 PRODUCT_NAME := full_lt28
 PRODUCT_DEVICE := lt28
 PRODUCT_BRAND := Android
-PRODUCT_MODEL := Full Android on LT28h (Xperia Ion)
+PRODUCT_MODEL := Xperia Ion
 
