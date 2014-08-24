@@ -165,5 +165,6 @@ $(call inherit-product, frameworks/base/build/phone-xhdpi-1024-dalvik-heap.mk)
 PRODUCT_NAME := full_lt28
 PRODUCT_DEVICE := lt28
 PRODUCT_BRAND := Android
+PRODUCT_MANUFACTURER := Sony
 PRODUCT_MODEL := Xperia Ion
 
