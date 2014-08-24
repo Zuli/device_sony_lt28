@@ -824,6 +824,28 @@ index b4a7a7a..c428a09 100644
  
  
 
+project system/bluetooth/
+diff --git a/bluedroid/Android.mk b/bluedroid/Android.mk
+index 17df49b..d8eb8f9 100644
+--- a/bluedroid/Android.mk
++++ b/bluedroid/Android.mk
+@@ -6,8 +6,13 @@ LOCAL_PATH:= $(call my-dir)
+ 
+ include $(CLEAR_VARS)
+ 
+-LOCAL_SRC_FILES := \
+-	bluetooth.c
++ifeq ($(TARGET_CUSTOM_BLUEDROID),)
++    LOCAL_SRC_FILES := \
++		bluetooth.c
++else
++    LOCAL_SRC_FILES := \
++		$(TARGET_CUSTOM_BLUEDROID)
++endif
+ 
+ LOCAL_C_INCLUDES := \
+ 	$(LOCAL_PATH)/include \
+
 project system/core/
 diff --git a/include/system/audio.h b/include/system/audio.h
 index 52ba5e7..c139f37 100644

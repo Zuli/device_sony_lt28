@@ -65,7 +65,6 @@ WIFI_DRIVER_FW_PATH_PARAM        := "/sys/module/bcm4330/parameters/firmware_pat
 # Bluetooth
 BOARD_HAVE_BLUETOOTH := true
 BOARD_HAVE_BLUETOOTH_BCM := true
-TARGET_NEEDS_BLUETOOTH_INIT_DELAY := true
 TARGET_CUSTOM_BLUEDROID := ../../../device/sony/lt28/bluedroid/bluetooth.c
 
 BOARD_SYSTEMIMAGE_PARTITION_SIZE := 1056964608

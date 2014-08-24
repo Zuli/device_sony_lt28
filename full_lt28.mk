@@ -1,6 +1,10 @@
 
 DEVICE_PACKAGE_OVERLAYS += device/sony/lt28/overlay
 
+# Permissions
+PRODUCT_COPY_FILES += \
+    frameworks/base/data/etc/handheld_core_hardware.xml:system/etc/permissions/handheld_core_hardware.xml
+
 PRODUCT_PACKAGES := \
     lights.msm8660
 

@@ -96,6 +96,11 @@ on boot
     chown system system /sys/devices/i2c-3/3-0054/threshold
     chown system system /sys/devices/i2c-3/3-0054/nburst
 
+    # bluetooth power up/down interface
+    chown bluetooth bluetooth /sys/class/rfkill/rfkill0/type
+    chown bluetooth bluetooth /sys/class/rfkill/rfkill0/state
+    chmod 0660                /sys/class/rfkill/rfkill0/state
+
     insmod /system/lib/modules/bcm4330.ko nvram_path=/system/etc/wifi/calibration iface_name=wlan0
 
 on post-fs
@@ -127,6 +132,16 @@ on init
 
     export EXTERNAL_STORAGE /mnt/sdcard
 
+
+service hciattach /system/bin/brcm_patchram_plus --enable_hci --enable_lpm \
+    --use_baudrate_for_download --tosleep 20000 --scopcm 0,4,0,0,0,0,0,0,3,0 \
+    --no2bytes --baudrate 3000000 --patchram /system/etc/firmware/BCM4330.hcd \
+    /dev/ttyHS0
+    class main
+    user bluetooth
+    group bluetooth net_bt_admin
+    disabled
+    oneshot
 
 service p2p_supplicant /system/bin/wpa_supplicant \
     -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf -N \

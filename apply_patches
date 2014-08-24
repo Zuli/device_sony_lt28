@@ -23,6 +23,10 @@ cd hardware/libhardware
 git apply ../../$PATCH_LOCATION/hardware_libhardware.patch
 
 croot
+cd system/bluetooth
+git apply ../../$PATCH_LOCATION/system_bluetooth.patch
+
+croot
 cd system/core
 git apply ../../$PATCH_LOCATION/system_core.patch
 
