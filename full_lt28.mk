@@ -154,6 +154,29 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     system/bluetooth/data/main.conf:system/etc/bluetooth/main.conf
 
+# NFC
+PRODUCT_PACKAGES += \
+    nfc.msm8660 \
+    com.android.nfc_extras \
+    libnfc \
+    libnfc_jni \
+    Nfc \
+    Tag
+
+# NFCEE access control
+ifeq ($(TARGET_BUILD_VARIANT),user)
+    NFCEE_ACCESS_PATH := device/sony/lt28/config/nfcee_access.xml
+else
+    NFCEE_ACCESS_PATH := device/sony/lt28/config/nfcee_access_debug.xml
+endif
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/vendor/firmware/libpn544_fw.so:system/vendor/firmware/libpn544_fw.so \
+    frameworks/base/data/etc/android.hardware.nfc.xml:system/etc/permissions/android.hardware.nfc.xml \
+    packages/apps/Nfc/migrate_nfc.txt:system/etc/updatecmds/migrate_nfc.txt \
+    device/sample/nxp/com.nxp.mifare.xml:system/etc/permissions/com.nxp.mifare.xml \
+    frameworks/base/nfc-extras/com.android.nfc_extras.xml:system/etc/permissions/com.android.nfc_extras.xml \
+    $(NFCEE_ACCESS_PATH):system/etc/nfcee_access.xml
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp,adb
 #    persist.sys.usb.config=mass_storage,adb
