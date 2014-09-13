@@ -1,0 +1,991 @@
+
+project build/
+diff --git a/core/binary.mk b/core/binary.mk
+index e488200..5f70232 100644
+--- a/core/binary.mk
++++ b/core/binary.mk
+@@ -486,6 +486,11 @@ all_objects := \
+ 	$(proto_generated_objects) \
+ 	$(addprefix $(TOPDIR)$(LOCAL_PATH)/,$(LOCAL_PREBUILT_OBJ_FILES))
+ 
++## Allow a device's own headers to take precedence over global ones
++ifneq ($(TARGET_SPECIFIC_HEADER_PATH),)
++LOCAL_C_INCLUDES := $(TOPDIR)$(TARGET_SPECIFIC_HEADER_PATH) $(LOCAL_C_INCLUDES)
++endif
++
+ LOCAL_C_INCLUDES += $(TOPDIR)$(LOCAL_PATH) $(intermediates) $(base_intermediates)
+ 
+ ifndef LOCAL_NDK_VERSION
+diff --git a/core/config.mk b/core/config.mk
+index 41e60ea..bca4be5 100644
+--- a/core/config.mk
++++ b/core/config.mk
+@@ -204,7 +204,7 @@ ICUDATA := $(HOST_OUT_EXECUTABLES)/icudata$(HOST_EXECUTABLE_SUFFIX)
+ SIGNAPK_JAR := $(HOST_OUT_JAVA_LIBRARIES)/signapk$(COMMON_JAVA_PACKAGE_SUFFIX)
+ MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ MINIGZIP := $(HOST_OUT_EXECUTABLES)/minigzip$(HOST_EXECUTABLE_SUFFIX)
+-MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
++MKBOOTIMG := $(if $(BOARD_CUSTOM_MKBOOTIMG), $(BOARD_CUSTOM_MKBOOTIMG), $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX))
+ MKYAFFS2 := $(HOST_OUT_EXECUTABLES)/mkyaffs2image$(HOST_EXECUTABLE_SUFFIX)
+ APICHECK := $(HOST_OUT_EXECUTABLES)/apicheck$(HOST_EXECUTABLE_SUFFIX)
+ FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
+diff --git a/core/legacy_prebuilts.mk b/core/legacy_prebuilts.mk
+index 41943b1..e72d711 100644
+--- a/core/legacy_prebuilts.mk
++++ b/core/legacy_prebuilts.mk
+@@ -123,4 +123,5 @@ GRANDFATHERED_ALL_PREBUILT := \
+ 	wl1271.bin \
+ 	zoneinfo.dat \
+ 	zoneinfo.idx \
+-	zoneinfo.version
++	zoneinfo.version \
++	bcm4330.ko
+
+project external/webkit/
+diff --git a/Source/WebCore/Android.mk b/Source/WebCore/Android.mk
+index 6542931..f4aa571 100644
+--- a/Source/WebCore/Android.mk
++++ b/Source/WebCore/Android.mk
+@@ -1258,3 +1258,8 @@ ifeq ($(SUPPORT_COMPLEX_SCRIPTS),true)
+ LOCAL_SRC_FILES := $(LOCAL_SRC_FILES) \
+ 	platform/graphics/android/HarfbuzzSkia.cpp
+ endif
++
++# HACK for qcom devices CPU upload mode
++ifeq ($(TARGET_FORCE_CPU_UPLOAD),true)
++LOCAL_CFLAGS += -DFORCE_CPU_UPLOAD
++endif
+diff --git a/Source/WebCore/platform/graphics/android/TransferQueue.cpp b/Source/WebCore/platform/graphics/android/TransferQueue.cpp
+index b20ec7a..a2fe31e 100644
+--- a/Source/WebCore/platform/graphics/android/TransferQueue.cpp
++++ b/Source/WebCore/platform/graphics/android/TransferQueue.cpp
+@@ -479,7 +479,11 @@ void TransferQueue::setTextureUploadType(TextureUploadType type)
+     discardQueue();
+ 
+     android::Mutex::Autolock lock(m_transferQueueItemLocks);
++#ifdef FORCE_CPU_UPLOAD
++    m_currentUploadType = CpuUpload; // force to cpu upload mode for now until gpu upload mode is fixed
++#else
+     m_currentUploadType = type;
++#endif
+     XLOGC("Now we set the upload to %s", m_currentUploadType == GpuUpload ? "GpuUpload" : "CpuUpload");
+ }
+ 
+diff --git a/Source/WebCore/platform/graphics/android/TransferQueue.h b/Source/WebCore/platform/graphics/android/TransferQueue.h
+index 63455de..41ab5b2 100644
+--- a/Source/WebCore/platform/graphics/android/TransferQueue.h
++++ b/Source/WebCore/platform/graphics/android/TransferQueue.h
+@@ -63,7 +63,11 @@ enum TextureUploadType {
+     GpuUpload = 1
+ };
+ 
++#ifdef FORCE_CPU_UPLOAD
++#define DEFAULT_UPLOAD_TYPE CpuUpload
++#else
+ #define DEFAULT_UPLOAD_TYPE GpuUpload
++#endif
+ 
+ class TileTransferData {
+ public:
+
+project frameworks/base/
+diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java
+index 71f3cf5..0b47393 100644
+--- a/core/java/android/view/HardwareRenderer.java
++++ b/core/java/android/view/HardwareRenderer.java
+@@ -441,6 +441,8 @@ public abstract class HardwareRenderer {
+         }
+ 
+         boolean mDirtyRegionsEnabled;
++        boolean mUpdateDirtyRegions;
++
+         final boolean mVsyncDisabled;
+ 
+         final int mGlVersion;
+@@ -675,6 +677,12 @@ public abstract class HardwareRenderer {
+             
+             initCaches();
+ 
++            enableDirtyRegions();
++
++            return mEglContext.getGL();
++        }
++
++        private void enableDirtyRegions() {
+             // If mDirtyRegions is set, this means we have an EGL configuration
+             // with EGL_SWAP_BEHAVIOR_PRESERVED_BIT set
+             if (sDirtyRegions) {
+@@ -690,8 +698,6 @@ public abstract class HardwareRenderer {
+                 // configuration (see RENDER_DIRTY_REGIONS)
+                 mDirtyRegionsEnabled = GLES20Canvas.isBackBufferPreserved();
+             }
+-
+-            return mEglContext.getGL();
+         }
+ 
+         abstract void initCaches();
+@@ -745,6 +751,9 @@ public abstract class HardwareRenderer {
+                 if (!createSurface(holder)) {
+                     return;
+                 }
++
++                mUpdateDirtyRegions = true;
++
+                 if (mCanvas != null) {
+                     setEnabled(true);
+                 }
+@@ -906,6 +915,10 @@ public abstract class HardwareRenderer {
+                     fallback(true);
+                     return SURFACE_STATE_ERROR;
+                 } else {
++                    if (mUpdateDirtyRegions) {
++                        enableDirtyRegions();
++                        mUpdateDirtyRegions = false;
++                    }
+                     return SURFACE_STATE_UPDATED;
+                 }
+             }
+diff --git a/graphics/jni/android_renderscript_RenderScript.cpp b/graphics/jni/android_renderscript_RenderScript.cpp
+index af03ee2..2644a2d 100644
+--- a/graphics/jni/android_renderscript_RenderScript.cpp
++++ b/graphics/jni/android_renderscript_RenderScript.cpp
+@@ -568,6 +568,7 @@ nAllocationElementData1D(JNIEnv *_env, jobject _this, RsContext con, jint alloc,
+     LOG_API("nAllocationElementData1D, con(%p), alloc(%p), offset(%i), comp(%i), len(%i), sizeBytes(%i)", con, (RsAllocation)alloc, offset, compIdx, len, sizeBytes);
+     jbyte *ptr = _env->GetByteArrayElements(data, NULL);
+     rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, compIdx, sizeBytes);
++    //rsAllocation1DElementData(con, (RsAllocation)alloc, offset, lod, ptr, sizeBytes, compIdx);
+     _env->ReleaseByteArrayElements(data, ptr, JNI_ABORT);
+ }
+ 
+diff --git a/include/media/stagefright/ColorConverter.h b/include/media/stagefright/ColorConverter.h
+index 85ba920..5ebf1f7 100644
+--- a/include/media/stagefright/ColorConverter.h
++++ b/include/media/stagefright/ColorConverter.h
+@@ -83,6 +83,51 @@ private:
+     ColorConverter &operator=(const ColorConverter &);
+ };
+ 
++#ifdef QCOM_HARDWARE
++//------------------------------------------
++enum ColorConvertFormat {
++    RGB565 = 1,
++    YCbCr420Tile,
++    YCbCr420SP,
++    YCbCr420P,
++    YCrCb420P,
++};
++
++/* 64 bit flag variable, reserving bits as needed */
++enum ColorConvertFlags {
++    COLOR_CONVERT_ALIGN_NONE = 1,
++    COLOR_CONVERT_CENTER_OUTPUT = 1<<1,
++    COLOR_CONVERT_ALIGN_16 =   1<<4,
++    COLOR_CONVERT_ALIGN_2048 = 1<<11,
++    COLOR_CONVERT_ALIGN_8192 = 1<<13,
++};
++
++struct ColorConvertParams {
++    size_t width;
++    size_t height;
++
++    size_t cropWidth;
++    size_t cropHeight;
++
++    size_t cropLeft;
++    size_t cropRight;
++    size_t cropTop;
++    size_t cropBottom;
++
++    ColorConvertFormat colorFormat;
++    const void * data;
++    int fd;
++
++    uint64_t flags;
++};
++
++typedef int (* ConvertFn)(ColorConvertParams src,
++                          ColorConvertParams dst, uint8_t *adjustedClip);
++
++int convert(ColorConvertParams src, ColorConvertParams dst,
++            uint8_t *adjustedClip);
++#endif
++
+ }  // namespace android
+ 
+ #endif  // COLOR_CONVERTER_H_
+diff --git a/include/media/stagefright/openmax/OMX_IVCommon.h b/include/media/stagefright/openmax/OMX_IVCommon.h
+index 8bb4ded..0eb9fd2 100644
+--- a/include/media/stagefright/openmax/OMX_IVCommon.h
++++ b/include/media/stagefright/openmax/OMX_IVCommon.h
+@@ -159,6 +159,9 @@ typedef enum OMX_COLOR_FORMATTYPE {
+     OMX_COLOR_FormatAndroidOpaque = 0x7F000789,
+     OMX_TI_COLOR_FormatYUV420PackedSemiPlanar = 0x7F000100,
+     OMX_QCOM_COLOR_FormatYVU420SemiPlanar = 0x7FA30C00,
++#ifdef QCOM_HARDWARE
++    QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka = 0x7FA30C03,
++#endif
+     OMX_COLOR_FormatMax = 0x7FFFFFFF
+ } OMX_COLOR_FORMATTYPE;
+ 
+diff --git a/include/ui/FramebufferNativeWindow.h b/include/ui/FramebufferNativeWindow.h
+index 302d012..565561f 100644
+--- a/include/ui/FramebufferNativeWindow.h
++++ b/include/ui/FramebufferNativeWindow.h
+@@ -30,7 +30,11 @@
+ 
+ #include <ui/egl/android_natives.h>
+ 
++#ifdef QCOM_HARDWARE
++#define NUM_FRAMEBUFFERS_MAX  3
++#else
+ #define NUM_FRAME_BUFFERS  2
++#endif
+ 
+ extern "C" EGLNativeWindowType android_createDisplaySurface(void);
+ 
+@@ -76,7 +80,11 @@ private:
+     framebuffer_device_t* fbDev;
+     alloc_device_t* grDev;
+ 
++#ifdef QCOM_HARDWARE
++    sp<NativeBuffer> buffers[NUM_FRAMEBUFFERS_MAX];
++#else
+     sp<NativeBuffer> buffers[NUM_FRAME_BUFFERS];
++#endif
+     sp<NativeBuffer> front;
+     
+     mutable Mutex mutex;
+diff --git a/libs/hwui/OpenGLRenderer.cpp b/libs/hwui/OpenGLRenderer.cpp
+index 4d22646..d8f0815 100644
+--- a/libs/hwui/OpenGLRenderer.cpp
++++ b/libs/hwui/OpenGLRenderer.cpp
+@@ -144,6 +144,13 @@ void OpenGLRenderer::setViewport(int width, int height) {
+     mDirtyClip = false;
+ }
+ 
++#ifdef QCOM_HARDWARE
++void OpenGLRenderer::getViewport(int &width, int &height) {
++    width = mWidth;
++    height = mHeight;
++}
++#endif
++
+ void OpenGLRenderer::prepare(bool opaque) {
+     prepareDirty(0.0f, 0.0f, mWidth, mHeight, opaque);
+ }
+diff --git a/libs/hwui/OpenGLRenderer.h b/libs/hwui/OpenGLRenderer.h
+index 2fc88e1..da4f034 100644
+--- a/libs/hwui/OpenGLRenderer.h
++++ b/libs/hwui/OpenGLRenderer.h
+@@ -64,6 +64,10 @@ public:
+ 
+     virtual void setViewport(int width, int height);
+ 
++#ifdef QCOM_HARDWARE
++    ANDROID_API void getViewport(int &width, int &height);
++#endif
++
+     ANDROID_API void prepare(bool opaque);
+     virtual void prepareDirty(float left, float top, float right, float bottom, bool opaque);
+     virtual void finish();
+diff --git a/libs/ui/FramebufferNativeWindow.cpp b/libs/ui/FramebufferNativeWindow.cpp
+index 8949730..3a48428 100644
+--- a/libs/ui/FramebufferNativeWindow.cpp
++++ b/libs/ui/FramebufferNativeWindow.cpp
+@@ -97,9 +97,17 @@ FramebufferNativeWindow::FramebufferNativeWindow()
+         mUpdateOnDemand = (fbDev->setUpdateRect != 0);
+         
+         // initialize the buffer FIFO
++#ifdef QCOM_HARDWARE
++        mNumBuffers = fbDev->numFramebuffers;
++        mNumFreeBuffers = mNumBuffers;
++        mBufferHead = 0;
++
++        LOGD("mNumBuffers = %d", mNumBuffers);
++#else
+         mNumBuffers = NUM_FRAME_BUFFERS;
+         mNumFreeBuffers = NUM_FRAME_BUFFERS;
+         mBufferHead = mNumBuffers-1;
++#endif
+ 
+         for (i = 0; i < mNumBuffers; i++)
+         {
+@@ -147,10 +155,18 @@ FramebufferNativeWindow::FramebufferNativeWindow()
+ FramebufferNativeWindow::~FramebufferNativeWindow() 
+ {
+     if (grDev) {
++#ifdef QCOM_HARDWARE
++       for(int i = 0; i < mNumBuffers; i++) {
++            if (buffers[i] != NULL) {
++                grDev->free(grDev, buffers[i]->handle);
++            }
++        }
++#else
+         if (buffers[0] != NULL)
+             grDev->free(grDev, buffers[0]->handle);
+         if (buffers[1] != NULL)
+             grDev->free(grDev, buffers[1]->handle);
++#endif
+         gralloc_close(grDev);
+     }
+ 
+@@ -232,17 +248,23 @@ int FramebufferNativeWindow::lockBuffer(ANativeWindow* window,
+         ANativeWindowBuffer* buffer)
+ {
+     FramebufferNativeWindow* self = getSelf(window);
++#ifdef QCOM_HARDWARE
++    framebuffer_device_t* fb = self->fbDev;
++#endif
+     Mutex::Autolock _l(self->mutex);
+ 
+     const int index = self->mCurrentBufferIndex;
+     GraphicLog& logger(GraphicLog::getInstance());
+     logger.log(GraphicLog::SF_FB_LOCK_BEFORE, index);
+ 
++#ifdef QCOM_HARDWARE
++    fb->lockBuffer(fb, index);
++#else
+     // wait that the buffer we're locking is not front anymore
+     while (self->front == buffer) {
+         self->mCondition.wait(self->mutex);
+     }
+-
++#endif
+     logger.log(GraphicLog::SF_FB_LOCK_AFTER, index);
+ 
+     return NO_ERROR;
+diff --git a/media/libstagefright/Android.mk b/media/libstagefright/Android.mk
+index 690deac..15d8300 100644
+--- a/media/libstagefright/Android.mk
++++ b/media/libstagefright/Android.mk
+@@ -148,6 +148,10 @@ LOCAL_SHARED_LIBRARIES += \
+ 
+ LOCAL_CFLAGS += -Wno-multichar
+ 
++ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
++        LOCAL_C_INCLUDES += $(TOP)/device/sony/lt28/display/libgralloc
++endif
++
+ LOCAL_MODULE:= libstagefright
+ 
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/media/libstagefright/OMXCodec.cpp b/media/libstagefright/OMXCodec.cpp
+old mode 100755
+new mode 100644
+index 86b3fe4..d5a1104
+--- a/media/libstagefright/OMXCodec.cpp
++++ b/media/libstagefright/OMXCodec.cpp
+@@ -44,6 +44,9 @@
+ #include <OMX_Audio.h>
+ #include <OMX_Component.h>
+ 
++#ifdef QCOM_HARDWARE
++#include <gralloc_priv.h>
++#endif
+ #include "include/avc_utils.h"
+ 
+ namespace android {
+@@ -1403,7 +1406,11 @@ status_t OMXCodec::setVideoOutputFormat(
+                || format.eColorFormat == OMX_COLOR_FormatYUV420SemiPlanar
+                || format.eColorFormat == OMX_COLOR_FormatCbYCrY
+                || format.eColorFormat == OMX_TI_COLOR_FormatYUV420PackedSemiPlanar
+-               || format.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar);
++               || format.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar
++#ifdef QCOM_HARDWARE
++               || format.eColorFormat == QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka
++#endif
++               );
+ 
+         err = mOMX->setParameter(
+                 mNode, OMX_IndexParamVideoPortFormat,
+@@ -1842,11 +1849,23 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
+         return err;
+     }
+ 
++#ifdef QCOM_HARDWARE
++    int format = (def.format.video.eColorFormat ==
++                  QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka)?
++                 HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED : def.format.video.eColorFormat;
++    if(def.format.video.eColorFormat == OMX_QCOM_COLOR_FormatYVU420SemiPlanar)
++        format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
++#endif
++
+     err = native_window_set_buffers_geometry(
+             mNativeWindow.get(),
+             def.format.video.nFrameWidth,
+             def.format.video.nFrameHeight,
++#ifdef QCOM_HARDWARE
++            format);
++#else
+             def.format.video.eColorFormat);
++#endif
+ 
+     if (err != 0) {
+         LOGE("native_window_set_buffers_geometry failed: %s (%d)",
+diff --git a/media/libstagefright/colorconversion/Android.mk b/media/libstagefright/colorconversion/Android.mk
+index 62ba40f..3e0305c 100644
+--- a/media/libstagefright/colorconversion/Android.mk
++++ b/media/libstagefright/colorconversion/Android.mk
+@@ -9,6 +9,10 @@ LOCAL_C_INCLUDES := \
+         $(TOP)/frameworks/base/include/media/stagefright/openmax \
+         $(TOP)/hardware/msm7k
+ 
++ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
++        LOCAL_C_INCLUDES += $(TOP)/device/sony/lt28/media/mm-core/omxcore/inc
++endif
++
+ LOCAL_MODULE:= libstagefright_color_conversion
+ 
+ include $(BUILD_STATIC_LIBRARY)
+diff --git a/media/libstagefright/colorconversion/ColorConverter.cpp b/media/libstagefright/colorconversion/ColorConverter.cpp
+index 5cc3f78..12cb998 100644
+--- a/media/libstagefright/colorconversion/ColorConverter.cpp
++++ b/media/libstagefright/colorconversion/ColorConverter.cpp
+@@ -22,6 +22,10 @@
+ #include <media/stagefright/MediaDebug.h>
+ #include <media/stagefright/MediaErrors.h>
+ 
++#ifdef QCOM_HARDWARE
++#include <dlfcn.h>
++#endif
++
+ namespace android {
+ 
+ ColorConverter::ColorConverter(
+@@ -47,6 +51,9 @@ bool ColorConverter::isValid() const {
+         case OMX_QCOM_COLOR_FormatYVU420SemiPlanar:
+         case OMX_COLOR_FormatYUV420SemiPlanar:
+         case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
++#ifdef QCOM_HARDWARE
++        case QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka:
++#endif
+             return true;
+ 
+         default:
+@@ -122,6 +129,58 @@ status_t ColorConverter::convert(
+             err = convertTIYUV420PackedSemiPlanar(src, dst);
+             break;
+ 
++#ifdef QCOM_HARDWARE
++        case QOMX_COLOR_FormatYUV420PackedSemiPlanar64x32Tile2m8ka:
++            {
++                void * lib = dlopen("libmm-color-convertor.so", RTLD_NOW);
++
++                if (!lib) {
++                    LOGE("dlopen for libmm-color-convertor failed with errno %d", errno);
++                    return ERROR_UNSUPPORTED;
++                }
++
++
++                typedef int (*convertFn)(ColorConvertParams src, ColorConvertParams dst, uint8_t *adjustedClip);
++
++                convertFn convertNV12Tile = (convertFn)dlsym(lib, "_ZN7android7convertENS_18ColorConvertParamsES0_Ph");
++                if (!convertNV12Tile) {
++                    dlclose(lib);
++                    LOGE("dlsym on libmm-color-convertor failed with errno %d", errno);
++                    return ERROR_UNSUPPORTED;
++                }
++
++                struct ColorConvertParams srcTemp;
++                srcTemp.width = srcWidth;
++                srcTemp.height = srcHeight;
++                srcTemp.cropWidth = src.cropWidth();
++                srcTemp.cropHeight = src.cropHeight();
++                srcTemp.cropLeft = src.mCropLeft;
++                srcTemp.cropRight = src.mCropRight;
++                srcTemp.cropTop = src.mCropTop;
++                srcTemp.cropBottom = src.mCropBottom;
++                srcTemp.data = src.mBits;
++                srcTemp.colorFormat = YCbCr420Tile;
++                srcTemp.flags = 0;
++
++                struct ColorConvertParams dstTemp;
++                dstTemp.width = dstWidth;
++                dstTemp.height = dstHeight;
++                dstTemp.cropWidth = dst.cropWidth();
++                dstTemp.cropHeight = dst.cropHeight();
++                dstTemp.cropLeft = dst.mCropLeft;
++                dstTemp.cropRight = dst.mCropRight;
++                dstTemp.cropTop = dst.mCropTop;
++                dstTemp.cropBottom = dst.mCropBottom;
++                dstTemp.data = dst.mBits;
++                dstTemp.colorFormat = RGB565;
++                dstTemp.flags = 0;
++
++                uint8_t * adjustedClip = initClip();
++                err = convertNV12Tile(srcTemp, dstTemp, adjustedClip);
++                dlclose(lib);
++            }
++            break;
++#endif
+         default:
+         {
+             CHECK(!"Should not be here. Unknown color conversion.");
+diff --git a/media/libstagefright/omx/OMXNodeInstance.cpp b/media/libstagefright/omx/OMXNodeInstance.cpp
+index 0ff398a..977f979 100644
+--- a/media/libstagefright/omx/OMXNodeInstance.cpp
++++ b/media/libstagefright/omx/OMXNodeInstance.cpp
+@@ -455,7 +455,9 @@ status_t OMXNodeInstance::useGraphicBuffer2_l(
+         return UNKNOWN_ERROR;
+     }
+ 
++#ifndef QCOM_HARDWARE
+     CHECK_EQ(header->pBuffer, bufferHandle);
++#endif
+     CHECK_EQ(header->pAppPrivate, bufferMeta);
+ 
+     *buffer = header;
+diff --git a/opengl/include/EGL/eglext.h b/opengl/include/EGL/eglext.h
+index ca11863..9522f2f 100644
+--- a/opengl/include/EGL/eglext.h
++++ b/opengl/include/EGL/eglext.h
+@@ -229,6 +229,13 @@ struct ANativeWindowBuffer;
+ #define EGL_NATIVE_BUFFER_ANDROID               0x3140  /* eglCreateImageKHR target */
+ #endif
+ 
++#ifdef QCOM_HARDWARE
++#ifndef EGL_ANDROID_get_render_buffer
++#define EGL_ANDROID_get_render_buffer 1
++EGLAPI EGLClientBuffer EGLAPIENTRY eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw);
++#endif
++#endif // QCOM_HARDWARE
++
+ #ifndef EGL_ANDROID_recordable
+ #define EGL_ANDROID_recordable 1
+ #define EGL_RECORDABLE_ANDROID                  0x3142  /* EGLConfig attribute */
+diff --git a/opengl/include/GLES2/gl2ext.h b/opengl/include/GLES2/gl2ext.h
+index 9db4e25..3ed37f0 100644
+--- a/opengl/include/GLES2/gl2ext.h
++++ b/opengl/include/GLES2/gl2ext.h
+@@ -16,6 +16,10 @@ extern "C" {
+ #   define GL_APIENTRYP GL_APIENTRY*
+ #endif
+ 
++#ifdef QCOM_HARDWARE
++#define GL_GLEXT_PROTOTYPES
++#endif
++
+ /*------------------------------------------------------------------------*
+  * OES extension tokens
+  *------------------------------------------------------------------------*/
+diff --git a/opengl/libagl/egl.cpp b/opengl/libagl/egl.cpp
+index 6d4098c..5cecc0c 100644
+--- a/opengl/libagl/egl.cpp
++++ b/opengl/libagl/egl.cpp
+@@ -165,6 +165,9 @@ struct egl_surface_t
+     virtual     EGLint      getSwapBehavior() const;
+     virtual     EGLBoolean  swapBuffers();
+     virtual     EGLBoolean  setSwapRectangle(EGLint l, EGLint t, EGLint w, EGLint h);
++#ifdef QCOM_HARDWARE
++    virtual     EGLClientBuffer getRenderBuffer() const;
++#endif
+ protected:
+     GGLSurface              depth;
+ };
+@@ -208,6 +211,11 @@ EGLBoolean egl_surface_t::setSwapRectangle(
+ {
+     return EGL_FALSE;
+ }
++#ifdef QCOM_HARDWARE
++EGLClientBuffer egl_surface_t::getRenderBuffer() const {
++    return 0;
++}
++#endif
+ 
+ // ----------------------------------------------------------------------------
+ 
+@@ -233,6 +241,9 @@ struct egl_window_surface_v2_t : public egl_surface_t
+     virtual     EGLint      getRefreshRate() const;
+     virtual     EGLint      getSwapBehavior() const;
+     virtual     EGLBoolean  setSwapRectangle(EGLint l, EGLint t, EGLint w, EGLint h);
++#ifdef QCOM_HARDWARE
++    virtual     EGLClientBuffer  getRenderBuffer() const;
++#endif
+     
+ private:
+     status_t lock(ANativeWindowBuffer* buf, int usage, void** vaddr);
+@@ -571,6 +582,13 @@ EGLBoolean egl_window_surface_v2_t::setSwapRectangle(
+     return EGL_TRUE;
+ }
+ 
++#ifdef QCOM_HARDWARE
++EGLClientBuffer egl_window_surface_v2_t::getRenderBuffer() const
++{
++    return buffer;
++}
++#endif
++
+ EGLBoolean egl_window_surface_v2_t::bindDrawSurface(ogles_context_t* gl)
+ {
+     GGLSurface buffer;
+@@ -852,6 +870,10 @@ static const extention_map_t gExtentionMap[] = {
+             (__eglMustCastToProperFunctionPointerType)&eglDestroyImageKHR }, 
+     { "eglSetSwapRectangleANDROID", 
+             (__eglMustCastToProperFunctionPointerType)&eglSetSwapRectangleANDROID }, 
++#ifdef QCOM_HARDWARE
++    { "eglGetRenderBufferANDROID",
++            (__eglMustCastToProperFunctionPointerType)&eglGetRenderBufferANDROID },
++#endif
+ };
+ 
+ /*
+@@ -2077,3 +2099,20 @@ EGLBoolean eglSetSwapRectangleANDROID(EGLDisplay dpy, EGLSurface draw,
+ 
+     return EGL_TRUE;
+ }
++
++#ifdef QCOM_HARDWARE
++EGLClientBuffer eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw)
++{
++    if (egl_display_t::is_valid(dpy) == EGL_FALSE)
++        return setError(EGL_BAD_DISPLAY, (EGLClientBuffer)0);
++
++    egl_surface_t* d = static_cast<egl_surface_t*>(draw);
++    if (!d->isValid())
++        return setError(EGL_BAD_SURFACE, (EGLClientBuffer)0);
++    if (d->dpy != dpy)
++        return setError(EGL_BAD_DISPLAY, (EGLClientBuffer)0);
++
++    // post the surface
++    return d->getRenderBuffer();
++}
++#endif
+diff --git a/opengl/libs/EGL/eglApi.cpp b/opengl/libs/EGL/eglApi.cpp
+index 2b0ed5d..252668b 100644
+--- a/opengl/libs/EGL/eglApi.cpp
++++ b/opengl/libs/EGL/eglApi.cpp
+@@ -69,6 +69,10 @@ static const extention_map_t sExtentionMap[] = {
+             (__eglMustCastToProperFunctionPointerType)&eglGetSystemTimeFrequencyNV },
+     { "eglGetSystemTimeNV",
+             (__eglMustCastToProperFunctionPointerType)&eglGetSystemTimeNV },
++#ifdef QCOM_HARDWARE
++    { "eglGetRenderBufferANDROID",
++            (__eglMustCastToProperFunctionPointerType)&eglGetRenderBufferANDROID },
++#endif
+ };
+ 
+ // accesses protected by sExtensionMapMutex
+@@ -1443,6 +1447,25 @@ EGLBoolean eglGetSyncAttribKHR(EGLDisplay dpy, EGLSyncKHR sync, EGLint attribute
+ // ----------------------------------------------------------------------------
+ 
+ /* ANDROID extensions entry-point go here */
++#ifdef QCOM_HARDWARE
++EGLClientBuffer eglGetRenderBufferANDROID(EGLDisplay dpy, EGLSurface draw)
++{
++    clearError();
++
++    egl_display_t const * const dp = validate_display(dpy);
++    if (!dp) return EGL_FALSE;
++
++    SurfaceRef _s(dp, draw);
++    if (!_s.get()) return setError(EGL_BAD_SURFACE, (EGLClientBuffer*)0);
++
++    egl_surface_t const * const s = get_surface(draw);
++    if (s->cnx->egl.eglGetRenderBufferANDROID) {
++        return s->cnx->egl.eglGetRenderBufferANDROID(
++                dp->disp[s->impl].dpy, s->surface);
++    }
++    return setError(EGL_BAD_DISPLAY, (EGLClientBuffer*)0);
++}
++#endif
+ 
+ // ----------------------------------------------------------------------------
+ // NVIDIA extensions
+diff --git a/services/surfaceflinger/SurfaceTextureLayer.cpp b/services/surfaceflinger/SurfaceTextureLayer.cpp
+index 5020e00..93f16a8 100644
+--- a/services/surfaceflinger/SurfaceTextureLayer.cpp
++++ b/services/surfaceflinger/SurfaceTextureLayer.cpp
+@@ -106,7 +106,7 @@ status_t SurfaceTextureLayer::connect(int api,
+ #endif
+                 // fall through to set synchronous mode when not defaulting to
+                 // async mode.
+-            deafult:
++            default:
+                 err = setSynchronousMode(true);
+                 break;
+         }
+
+project hardware/libhardware/
+diff --git a/include/hardware/fb.h b/include/hardware/fb.h
+index ba2f286..d39c136 100644
+--- a/include/hardware/fb.h
++++ b/include/hardware/fb.h
+@@ -64,7 +64,14 @@ typedef struct framebuffer_device_t {
+     /* max swap interval supported by this framebuffer */
+     const int       maxSwapInterval;
+ 
++#ifdef QCOM_HARDWARE
++    /* number of framebuffers */
++    const int       numFramebuffers;
++
++    int reserved[7];
++#else
+     int reserved[8];
++#endif
+ 
+     /*
+      * requests a specific swap-interval (same definition than EGL)
+@@ -126,6 +133,10 @@ typedef struct framebuffer_device_t {
+ 
+     int (*compositionComplete)(struct framebuffer_device_t* dev);
+ 
++#ifdef QCOM_HARDWARE
++    int (*lockBuffer) (struct framebuffer_device_t* dev, int);
++#endif
++
+     /*
+      * This hook is OPTIONAL.
+      *
+@@ -141,7 +152,20 @@ typedef struct framebuffer_device_t {
+      */
+     int (*enableScreen)(struct framebuffer_device_t* dev, int enable);
+ 
++#ifdef QCOM_HARDWARE
++    int (*dequeueBuffer) (struct framebuffer_device_t* dev, int);
++
++    /*
++     * (*perform)() is used to inform custom event to fb device
++     * event - Type of event
++     * val1 - associated with event
++     * val2 - additional value(if any) associated with event
++     */
++    int (*perform) (struct framebuffer_device_t* dev, int event, int value);
++
++#else
+     void* reserved_proc[6];
++#endif
+ 
+ } framebuffer_device_t;
+ 
+diff --git a/include/hardware/hwcomposer.h b/include/hardware/hwcomposer.h
+index b4a7a7a..c428a09 100644
+--- a/include/hardware/hwcomposer.h
++++ b/include/hardware/hwcomposer.h
+@@ -66,7 +66,20 @@ enum {
+      * SurfaceFlinger will only honor this flag when the layer has no blending
+      *
+      */
++#ifdef QCOM_HARDWARE
++    HWC_HINT_CLEAR_FB       = 0x00000002,
++
++    /*
++     * HWC sets the HWC_HINT_DRAW_S3D_SS or HWC_HINT_DRAW_S3D_TB to tell
++     * Surfaceflinger that currently a S3D video layer is being drawn so
++     * convert the other layers to S3D format of Video while composing
++     *
++     */
++    HWC_HINT_DRAW_S3D_SIDE_BY_SIDE    = 0x00000004,
++    HWC_HINT_DRAW_S3D_TOP_BOTTOM      = 0x00000008
++#else
+     HWC_HINT_CLEAR_FB       = 0x00000002
++#endif
+ };
+ 
+ /*
+@@ -160,6 +173,11 @@ typedef struct hwc_layer {
+     /* blending to apply during composition */
+     int32_t blending;
+ 
++#ifdef QCOM_HARDWARE
++    /* alpha value of the layer */
++    int32_t alpha;
++#endif
++
+     /* area of the source to consider, the origin is the top-left corner of
+      * the buffer */
+     hwc_rect_t sourceCrop;
+@@ -187,6 +205,13 @@ enum {
+      * passed to (*prepare)() has changed by more than just the buffer handles.
+      */
+     HWC_GEOMETRY_CHANGED = 0x00000001,
++#ifdef QCOM_HARDWARE
++    /*
++     * HWC_SKIP_COMPOSITION is set by the HWC to indicate to SurfaceFlinger to
++     * skip composition for this iteration.
++     */
++    HWC_SKIP_COMPOSITION = 0x00000002
++#endif
+ };
+ 
+ /*
+@@ -331,6 +356,14 @@ typedef struct hwc_composer_device {
+ 
+     void* reserved_proc[6];
+ 
++#ifdef QCOM_HARDWARE
++    /*
++     * This API is called by Surfaceflinger to inform the HWC about the
++     * custom events(external display).
++     */
++    void (*perform)(struct hwc_composer_device* dev, int event, int value);
++#endif
++
+ } hwc_composer_device_t;
+ 
+ 
+
+project system/bluetooth/
+diff --git a/bluedroid/Android.mk b/bluedroid/Android.mk
+index 17df49b..d8eb8f9 100644
+--- a/bluedroid/Android.mk
++++ b/bluedroid/Android.mk
+@@ -6,8 +6,13 @@ LOCAL_PATH:= $(call my-dir)
+ 
+ include $(CLEAR_VARS)
+ 
+-LOCAL_SRC_FILES := \
+-	bluetooth.c
++ifeq ($(TARGET_CUSTOM_BLUEDROID),)
++    LOCAL_SRC_FILES := \
++		bluetooth.c
++else
++    LOCAL_SRC_FILES := \
++		$(TARGET_CUSTOM_BLUEDROID)
++endif
+ 
+ LOCAL_C_INCLUDES := \
+ 	$(LOCAL_PATH)/include \
+
+project system/core/
+diff --git a/include/system/audio.h b/include/system/audio.h
+index 52ba5e7..c139f37 100644
+--- a/include/system/audio.h
++++ b/include/system/audio.h
+@@ -288,7 +288,17 @@ typedef enum {
+     AUDIO_DEVICE_OUT_AUX_DIGITAL               = 0x400,
+     AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET         = 0x800,
+     AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET         = 0x1000,
++#if defined(QCOM_HARDWARE) && !defined(USES_AUDIO_LEGACY)
++    AUDIO_DEVICE_OUT_FM                        = 0x2000,
++    AUDIO_DEVICE_OUT_ANC_HEADSET               = 0x4000,
++    AUDIO_DEVICE_OUT_ANC_HEADPHONE             = 0x8000,
++    AUDIO_DEVICE_OUT_FM_TX                     = 0x10000,
++    AUDIO_DEVICE_OUT_DIRECTOUTPUT              = 0x20000,
++    AUDIO_DEVICE_OUT_PROXY                     = 0x40000,
++    AUDIO_DEVICE_OUT_DEFAULT                   = 0x80000,
++#else
+     AUDIO_DEVICE_OUT_DEFAULT                   = 0x8000,
++#endif
+     AUDIO_DEVICE_OUT_ALL      = (AUDIO_DEVICE_OUT_EARPIECE |
+                                  AUDIO_DEVICE_OUT_SPEAKER |
+                                  AUDIO_DEVICE_OUT_WIRED_HEADSET |
+@@ -302,6 +312,14 @@ typedef enum {
+                                  AUDIO_DEVICE_OUT_AUX_DIGITAL |
+                                  AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
+                                  AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET |
++#if defined(QCOM_HARDWARE) && !defined(USES_AUDIO_LEGACY)
++                                 AUDIO_DEVICE_OUT_FM |
++                                 AUDIO_DEVICE_OUT_ANC_HEADSET |
++                                 AUDIO_DEVICE_OUT_ANC_HEADPHONE |
++                                 AUDIO_DEVICE_OUT_FM_TX |
++                                 AUDIO_DEVICE_OUT_DIRECTOUTPUT |
++                                 AUDIO_DEVICE_OUT_PROXY |
++#endif
+                                  AUDIO_DEVICE_OUT_DEFAULT),
+     AUDIO_DEVICE_OUT_ALL_A2DP = (AUDIO_DEVICE_OUT_BLUETOOTH_A2DP |
+                                  AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES |
+@@ -311,6 +329,19 @@ typedef enum {
+                                  AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT),
+ 
+     /* input devices */
++#if defined(QCOM_HARDWARE) && !defined(USES_AUDIO_LEGACY)
++    AUDIO_DEVICE_IN_COMMUNICATION         = 0x100000,
++    AUDIO_DEVICE_IN_AMBIENT               = 0x200000,
++    AUDIO_DEVICE_IN_BUILTIN_MIC           = 0x400000,
++    AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET = 0x800000,
++    AUDIO_DEVICE_IN_WIRED_HEADSET         = 0x1000000,
++    AUDIO_DEVICE_IN_AUX_DIGITAL           = 0x2000000,
++    AUDIO_DEVICE_IN_VOICE_CALL            = 0x4000000,
++    AUDIO_DEVICE_IN_BACK_MIC              = 0x8000000,
++    AUDIO_DEVICE_IN_ANC_HEADSET           = 0x10000000,
++    AUDIO_DEVICE_IN_FM_RX                 = 0x20000000,
++    AUDIO_DEVICE_IN_FM_RX_A2DP            = 0x40000000,
++#else
+     AUDIO_DEVICE_IN_COMMUNICATION         = 0x10000,
+     AUDIO_DEVICE_IN_AMBIENT               = 0x20000,
+     AUDIO_DEVICE_IN_BUILTIN_MIC           = 0x40000,
+@@ -319,6 +350,7 @@ typedef enum {
+     AUDIO_DEVICE_IN_AUX_DIGITAL           = 0x200000,
+     AUDIO_DEVICE_IN_VOICE_CALL            = 0x400000,
+     AUDIO_DEVICE_IN_BACK_MIC              = 0x800000,
++#endif
+     AUDIO_DEVICE_IN_DEFAULT               = 0x80000000,
+ 
+     AUDIO_DEVICE_IN_ALL     = (AUDIO_DEVICE_IN_COMMUNICATION |
+@@ -329,6 +361,11 @@ typedef enum {
+                                AUDIO_DEVICE_IN_AUX_DIGITAL |
+                                AUDIO_DEVICE_IN_VOICE_CALL |
+                                AUDIO_DEVICE_IN_BACK_MIC |
++#if defined(QCOM_HARDWARE) && !defined(USES_AUDIO_LEGACY)
++                               AUDIO_DEVICE_IN_ANC_HEADSET |
++                               AUDIO_DEVICE_IN_FM_RX |
++                               AUDIO_DEVICE_IN_FM_RX_A2DP |
++#endif
+                                AUDIO_DEVICE_IN_DEFAULT),
+     AUDIO_DEVICE_IN_ALL_SCO = AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET,
+ } audio_devices_t;
+
+project system/vold/
+diff --git a/Android.mk b/Android.mk
+index bba6122..fc13c15 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -31,6 +31,10 @@ common_shared_libraries := \
+ 
+ include $(CLEAR_VARS)
+ 
++ifneq ($(BOARD_VOLD_MAX_PARTITIONS),)
++LOCAL_CFLAGS += -DVOLD_MAX_PARTITIONS=$(BOARD_VOLD_MAX_PARTITIONS)
++endif
++
+ LOCAL_MODULE := libvold
+ 
+ LOCAL_SRC_FILES := $(common_src_files)
+@@ -55,6 +59,10 @@ LOCAL_C_INCLUDES := $(common_c_includes)
+ 
+ LOCAL_CFLAGS := 
+ 
++ifneq ($(BOARD_VOLD_MAX_PARTITIONS),)
++LOCAL_CFLAGS += -DVOLD_MAX_PARTITIONS=$(BOARD_VOLD_MAX_PARTITIONS)
++endif
++
+ LOCAL_SHARED_LIBRARIES := $(common_shared_libraries)
+ 
+ include $(BUILD_EXECUTABLE)
+diff --git a/DirectVolume.cpp b/DirectVolume.cpp
+index 4acee76..eb41699 100644
+--- a/DirectVolume.cpp
++++ b/DirectVolume.cpp
+@@ -207,8 +207,8 @@ void DirectVolume::handlePartitionAdded(const char *devpath, NetlinkEvent *evt)
+ #ifdef PARTITION_DEBUG
+     SLOGD("Dv:partAdd: part_num = %d, minor = %d\n", part_num, minor);
+ #endif
+-    if (part_num >= MAX_PARTITIONS) {
+-        SLOGE("Dv:partAdd: ignoring part_num = %d (max: %d)\n", part_num, MAX_PARTITIONS-1);
++    if (part_num > MAX_PARTITIONS) {
++        SLOGE("Dv:partAdd: ignoring part_num = %d (max: %d)\n", part_num, MAX_PARTITIONS);
+     } else {
+         mPartMinors[part_num -1] = minor;
+     }
+diff --git a/DirectVolume.h b/DirectVolume.h
+index de1ed8b..ee86fba 100644
+--- a/DirectVolume.h
++++ b/DirectVolume.h
+@@ -21,13 +21,15 @@
+ 
+ #include "Volume.h"
+ 
+-#define MAX_PARTS 4
++#ifndef VOLD_MAX_PARTITIONS
++#define VOLD_MAX_PARTITIONS 4
++#endif
+ 
+ typedef android::List<char *> PathCollection;
+ 
+ class DirectVolume : public Volume {
+ public:
+-    static const int MAX_PARTITIONS = 4;
++    static const int MAX_PARTITIONS = VOLD_MAX_PARTITIONS;
+ protected:
+     PathCollection *mPaths;
+     int            mDiskMajor;

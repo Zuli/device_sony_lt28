@@ -177,6 +177,57 @@ PRODUCT_COPY_FILES += \
     frameworks/base/nfc-extras/com.android.nfc_extras.xml:system/etc/permissions/com.android.nfc_extras.xml \
     $(NFCEE_ACCESS_PATH):system/etc/nfcee_access.xml
 
+# GPS
+PRODUCT_PACKAGES += \
+    gps.msm8660
+
+# The gps config appropriate for this device
+$(call inherit-product, device/common/gps/gps_as_supl.mk)
+
+PRODUCT_COPY_FILES += \
+    frameworks/base/data/etc/android.hardware.location.gps.xml:system/etc/permissions/android.hardware.location.gps.xml \
+    $(LOCAL_PATH)/prebuilt/bin/bq275xx_fwloader:system/bin/bq275xx_fwloader
+
+# Configuration scripts
+PRODUCT_COPY_FILES += \
+   $(LOCAL_PATH)/config/hw_config.sh:system/etc/hw_config.sh
+
+# Firmwares
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/amss.mbn:system/etc/firmware/amss.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/bq27520_fw-0507_filever-0009_proj-aoba_golden.bqfs:system/etc/firmware/bq27520_fw-0507_filever-0009_proj-aoba_golden.bqfs \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/bq27520_fw-0507_filever-0009_proj-aoba_golden.dffs:system/etc/firmware/bq27520_fw-0507_filever-0009_proj-aoba_golden.dffs \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dbl.mbn:system/etc/firmware/dbl.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsp1.mbn:system/etc/firmware/dsp1.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsp2.mbn:system/etc/firmware/dsp2.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsps_fluid.b00:system/etc/firmware/dsps_fluid.b00 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsps_fluid.b01:system/etc/firmware/dsps_fluid.b01 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsps_fluid.b02:system/etc/firmware/dsps_fluid.b02 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsps_fluid.b03:system/etc/firmware/dsps_fluid.b03 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/dsps_fluid.mdt:system/etc/firmware/dsps_fluid.mdt \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/efs1.mbn:system/etc/firmware/efs1.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/efs2.mbn:system/etc/firmware/efs2.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/efs3.mbn:system/etc/firmware/efs3.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b00:system/etc/firmware/modem.b00 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b01:system/etc/firmware/modem.b01 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b02:system/etc/firmware/modem.b02 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b03:system/etc/firmware/modem.b03 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b04:system/etc/firmware/modem.b04 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b05:system/etc/firmware/modem.b05 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b06:system/etc/firmware/modem.b06 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b07:system/etc/firmware/modem.b07 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b08:system/etc/firmware/modem.b08 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b09:system/etc/firmware/modem.b09 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.b10:system/etc/firmware/modem.b10 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/modem.mdt:system/etc/firmware/modem.mdt \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/osbl.mbn:system/etc/firmware/osbl.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/ta.mbn:system/etc/firmware/ta.mbn \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/touch_module_id_0x14.img:system/etc/firmware/touch_module_id_0x14.img \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/tzapps.b00:system/etc/firmware/tzapps.b00 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/tzapps.b01:system/etc/firmware/tzapps.b01 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/tzapps.b02:system/etc/firmware/tzapps.b02 \
+    $(LOCAL_PATH)/prebuilt/etc/firmware/tzapps.mdt:system/etc/firmware/tzapps.mdt
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp,adb
 #    persist.sys.usb.config=mass_storage,adb
