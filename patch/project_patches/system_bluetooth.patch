@@ -1,4 +1,4 @@
-﻿diff --git a/bluedroid/Android.mk b/bluedroid/Android.mk
+diff --git a/bluedroid/Android.mk b/bluedroid/Android.mk
 index 17df49b..d8eb8f9 100644
 --- a/bluedroid/Android.mk
 +++ b/bluedroid/Android.mk

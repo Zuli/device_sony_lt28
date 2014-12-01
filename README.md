@@ -16,7 +16,7 @@ Untar the download file 6.1.E.0.233.tar.bz2 (`tar jxvf 6.1.E.0.233.tar.bz2`), co
 The first time to setup the source code, you need run the following commands to apply patches to aosp:
 
 * `source build/envsetup.sh`
-* `device/sony/lt28/apply_patches`
+* `. device/sony/lt28/apply_patches`
 
 Run the following commands to compile:
 

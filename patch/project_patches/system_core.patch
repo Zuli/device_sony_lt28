@@ -75,3 +75,4 @@ index 52ba5e7..c139f37 100644
                                 AUDIO_DEVICE_IN_DEFAULT),
      AUDIO_DEVICE_IN_ALL_SCO = AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET,
  } audio_devices_t;
+

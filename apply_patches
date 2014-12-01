@@ -33,3 +33,5 @@ git apply ../../$PATCH_LOCATION/system_core.patch
 croot
 cd system/vold
 git apply ../../$PATCH_LOCATION/system_vold.patch
+
+croot

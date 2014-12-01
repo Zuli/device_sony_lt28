@@ -61,3 +61,4 @@ index de1ed8b..ee86fba 100644
  protected:
      PathCollection *mPaths;
      int            mDiskMajor;
+
