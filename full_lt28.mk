@@ -177,6 +177,14 @@ PRODUCT_COPY_FILES += \
     frameworks/base/nfc-extras/com.android.nfc_extras.xml:system/etc/permissions/com.android.nfc_extras.xml \
     $(NFCEE_ACCESS_PATH):system/etc/nfcee_access.xml
 
+# Camera
+PRODUCT_PACKAGES := \
+    Camera
+
+PRODUCT_COPY_FILES += \
+    frameworks/base/data/etc/android.hardware.camera.flash-autofocus.xml:system/etc/permissions/android.hardware.camera.flash-autofocus.xml \
+    frameworks/base/data/etc/android.hardware.camera.front.xml:system/etc/permissions/android.hardware.camera.front.xml
+
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp,adb
 #    persist.sys.usb.config=mass_storage,adb
